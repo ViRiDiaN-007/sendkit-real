@@ -63,6 +63,9 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Backward-compat for templates that expect `streamers`
+    const streamers = Array.isArray(streamerConfigs) ? streamerConfigs : [];
+
     return res.render('dashboard/index', {
       title: 'Dashboard',
       user,
@@ -70,10 +73,11 @@ router.get('/', async (req, res) => {
       services,
       welcome,
       streamerConfigs,
+      streamers, // <- important for your EJS
     });
   } catch (err) {
     console.error('Dashboard error:', err);
-    return res.status(500).render('error', { message: 'Failed to load dashboard', error: err });
+    return res.status(500).render('error', { title: 'Error', message: 'Failed to load dashboard', error: err, user: req.user || null });
   }
 });
 
@@ -91,7 +95,7 @@ router.get('/add-streamer', (req, res) => {
     });
   } catch (err) {
     console.error('Add streamer page error:', err);
-    return res.status(500).render('error', { message: 'Failed to load form', error: err });
+    return res.status(500).render('error', { title: 'Error', message: 'Failed to load form', error: err, user: req.user || null });
   }
 });
 
@@ -102,10 +106,10 @@ router.get('/add-streamer', (req, res) => {
 router.post('/add-streamer', async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).render('error', { title: 'Unauthorized', message: 'Please log in first.', user: req.user || null });
     }
     if (!req.databaseService || typeof req.databaseService.createStreamerConfig !== 'function') {
-      return res.status(500).json({ error: 'Database service not available' });
+      return res.status(500).render('error', { title: 'Error', message: 'Database service not available', user: req.user || null });
     }
 
     const {
@@ -118,11 +122,11 @@ router.post('/add-streamer', async (req, res) => {
 
     // Minimal validation — adjust as needed
     if (!wallet_address) {
-      return res.status(400).json({ error: 'wallet_address is required' });
+      return res.status(400).render('error', { title: 'Invalid data', message: 'wallet_address is required', user: req.user || null });
     }
 
     const payload = {
-      user_id: req.user.id, // <- IMPORTANT: satisfies NOT NULL constraint
+      user_id: req.user.id, // satisfies NOT NULL constraint
       streamer_id: streamer_id || null,
       username: username || null,
       wallet_address,
@@ -130,13 +134,13 @@ router.post('/add-streamer', async (req, res) => {
       is_active: typeof is_active === 'boolean' ? is_active : true,
     };
 
-    const created = await req.databaseService.createStreamerConfig(payload);
+    await req.databaseService.createStreamerConfig(payload);
 
     // After successful creation, redirect back to dashboard
     return res.redirect('/dashboard');
   } catch (err) {
     console.error('Add streamer error:', err);
-    return res.status(500).render('error', { message: 'Failed to add streamer', error: err });
+    return res.status(500).render('error', { title: 'Error', message: 'Failed to add streamer', error: err, user: req.user || null });
   }
 });
 
