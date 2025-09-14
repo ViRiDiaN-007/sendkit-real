@@ -1,115 +1,142 @@
 // src/routes/dashboard.js
 const express = require('express');
 const router = express.Router();
-const DatabaseService = require('../services/DatabaseService');
 
-// Dashboard home
+/**
+ * Helper to compute the base URL for browser sources and links
+ */
+function computeBaseUrl(req) {
+  if (process.env.BASE_URL && process.env.BASE_URL.trim()) {
+    return process.env.BASE_URL.trim();
+  }
+  const proto =
+    (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'].split(',')[0]) ||
+    req.protocol ||
+    'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  return `${proto}://${host}`;
+}
+
+/**
+ * Helper to surface service status flags to the dashboard
+ * Falls back safely if app.locals isn’t populated.
+ */
+function getServiceStatus(app) {
+  const locals = (app && app.locals) || {};
+  const status = locals.serviceStatus || {};
+  return {
+    tts: Boolean(status.tts ?? locals.ttsService),
+    poll: Boolean(status.poll ?? locals.pollService),
+    automod: Boolean(status.automod ?? locals.automodService),
+  };
+}
+
+/**
+ * GET /dashboard
+ * Renders the main dashboard view.
+ */
 router.get('/', async (req, res) => {
   try {
-    const db = new DatabaseService();
-    const streamers = await db.getStreamerConfigsByUserId(req.user.id);
+    const user = req.user || null;
 
-    res.render('dashboard/index', {
-      title: 'Your Dashboard',
-      user: req.user,
-      streamers,
-      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
-      welcome: req.query.welcome || null, // always defined
+    // Optional welcome banner logic (e.g., after registration ?welcome=1)
+    const welcome =
+      req.query.welcome === '1' ||
+      req.query.welcome === 'true' ||
+      Boolean(req.session && req.session.justRegistered);
+
+    // Clear the one-time flag if we used it
+    if (req.session && req.session.justRegistered) {
+      delete req.session.justRegistered;
+    }
+
+    const baseUrl = computeBaseUrl(req);
+    const services = getServiceStatus(req.app);
+
+    // Load streamer configs for the logged-in user (empty list if not logged in)
+    let streamerConfigs = [];
+    if (user && req.databaseService && typeof req.databaseService.getStreamerConfigsByUserId === 'function') {
+      try {
+        streamerConfigs = await req.databaseService.getStreamerConfigsByUserId(user.id);
+      } catch (e) {
+        console.error('Dashboard: failed to load streamer configs:', e);
+      }
+    }
+
+    return res.render('dashboard/index', {
+      title: 'Dashboard',
+      user,
+      baseUrl,
+      services,
+      welcome,
+      streamerConfigs,
     });
   } catch (err) {
     console.error('Dashboard error:', err);
-    res.status(500).send('Error loading dashboard');
+    return res.status(500).render('error', { message: 'Failed to load dashboard', error: err });
   }
 });
 
-// Add streamer form
-router.get('/add', (req, res) => {
-  res.render('dashboard/add-streamer', {
-    title: 'Add Streamer',
-    user: req.user,
-    baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
-    welcome: null,
-  });
-});
-
-// Handle add streamer submission
-router.post('/add', async (req, res) => {
+/**
+ * GET /dashboard/add-streamer
+ * Renders the add-streamer form and provides baseUrl used by the EJS template.
+ */
+router.get('/add-streamer', (req, res) => {
   try {
-    const db = new DatabaseService();
-    const data = {
-      user_id: req.user.id, // ensure not null
-      twitch_username: req.body.twitch_username || null,
-      youtube_channel: req.body.youtube_channel || null,
-      kick_username: req.body.kick_username || null,
-      tts_enabled: req.body.tts_enabled ? true : false,
-    };
-
-    await db.createStreamerConfig(data);
-    res.redirect('/dashboard?welcome=1');
-  } catch (err) {
-    console.error('Add streamer error:', err);
-    res.status(500).send('Error adding streamer');
-  }
-});
-
-// Edit streamer config
-router.get('/edit/:id', async (req, res) => {
-  try {
-    const db = new DatabaseService();
-    const streamer = await db.getStreamerConfigById(req.params.id);
-
-    if (!streamer || streamer.user_id !== req.user.id) {
-      return res.status(403).send('Forbidden');
-    }
-
-    res.render('dashboard/edit-streamer', {
-      title: 'Edit Streamer',
-      user: req.user,
-      streamer,
-      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
-      welcome: null,
+    const baseUrl = computeBaseUrl(req);
+    return res.render('dashboard/add-streamer', {
+      title: 'Add Streamer',
+      baseUrl,
+      user: req.user || null,
     });
   } catch (err) {
-    console.error('Edit streamer error:', err);
-    res.status(500).send('Error loading streamer config');
+    console.error('Add streamer page error:', err);
+    return res.status(500).render('error', { message: 'Failed to load form', error: err });
   }
 });
 
-router.post('/edit/:id', async (req, res) => {
+/**
+ * POST /dashboard/add-streamer
+ * Creates a streamer configuration for the logged-in user.
+ */
+router.post('/add-streamer', async (req, res) => {
   try {
-    const db = new DatabaseService();
-    const data = {
-      id: req.params.id,
-      user_id: req.user.id,
-      twitch_username: req.body.twitch_username || null,
-      youtube_channel: req.body.youtube_channel || null,
-      kick_username: req.body.kick_username || null,
-      tts_enabled: req.body.tts_enabled ? true : false,
-    };
-
-    await db.updateStreamerConfig(data);
-    res.redirect('/dashboard');
-  } catch (err) {
-    console.error('Update streamer error:', err);
-    res.status(500).send('Error updating streamer');
-  }
-});
-
-// Delete streamer
-router.post('/delete/:id', async (req, res) => {
-  try {
-    const db = new DatabaseService();
-    const streamer = await db.getStreamerConfigById(req.params.id);
-
-    if (!streamer || streamer.user_id !== req.user.id) {
-      return res.status(403).send('Forbidden');
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    if (!req.databaseService || typeof req.databaseService.createStreamerConfig !== 'function') {
+      return res.status(500).json({ error: 'Database service not available' });
     }
 
-    await db.deleteStreamerConfig(req.params.id);
-    res.redirect('/dashboard');
+    const {
+      streamer_id,
+      username,
+      wallet_address,
+      token_address,
+      is_active,
+    } = req.body || {};
+
+    // Minimal validation — adjust as needed
+    if (!wallet_address) {
+      return res.status(400).json({ error: 'wallet_address is required' });
+    }
+
+    const payload = {
+      user_id: req.user.id, // <- IMPORTANT: satisfies NOT NULL constraint
+      streamer_id: streamer_id || null,
+      username: username || null,
+      wallet_address,
+      token_address: token_address || null,
+      is_active: typeof is_active === 'boolean' ? is_active : true,
+    };
+
+    const created = await req.databaseService.createStreamerConfig(payload);
+
+    // After successful creation, redirect back to dashboard
+    return res.redirect('/dashboard');
   } catch (err) {
-    console.error('Delete streamer error:', err);
-    res.status(500).send('Error deleting streamer');
+    console.error('Add streamer error:', err);
+    return res.status(500).render('error', { message: 'Failed to add streamer', error: err });
   }
 });
 
