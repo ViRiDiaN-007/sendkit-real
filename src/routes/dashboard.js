@@ -1,115 +1,115 @@
 // src/routes/dashboard.js
 const express = require('express');
 const router = express.Router();
+const DatabaseService = require('../services/DatabaseService');
 
-/**
- * Compute the base URL used in browser-source links.
- * Prefer .env BASE_URL, otherwise derive from request.
- */
-function computeBaseUrl(req) {
-  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '');
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http');
-  const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
-  return `${proto}://${host}`;
-}
-
-// Guard to ensure we have req.user (your server mounts this router behind requireAuth already)
-function ensureUser(req, res, next) {
-  if (req.user && req.user.id) return next();
-  // If somehow unauthenticated, bounce to login
-  return res.redirect('/auth/login');
-}
-
-// List dashboard (streamers for this user)
-router.get('/', ensureUser, async (req, res) => {
+// Dashboard home
+router.get('/', async (req, res) => {
   try {
-    const baseUrl = computeBaseUrl(req);
-    const configs = await req.databaseService.getStreamerConfigsByUserId(req.user.id);
-    return res.render('dashboard/index', {
+    const db = new DatabaseService();
+    const streamers = await db.getStreamerConfigsByUserId(req.user.id);
+
+    res.render('dashboard/index', {
       title: 'Your Dashboard',
       user: req.user,
-      streamerConfigs: configs || [],
-      baseUrl,
-      error: null,
+      streamers,
+      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
+      welcome: req.query.welcome || null, // always defined
     });
   } catch (err) {
     console.error('Dashboard error:', err);
-    return res.status(500).render('dashboard/index', {
-      title: 'Your Dashboard',
-      user: req.user,
-      streamerConfigs: [],
-      baseUrl: computeBaseUrl(req),
-      error: 'Failed to load your streamers.',
-    });
+    res.status(500).send('Error loading dashboard');
   }
 });
 
-// Show "Add streamer" form
-router.get('/add-streamer', ensureUser, (req, res) => {
-  const baseUrl = computeBaseUrl(req);
-  return res.render('dashboard/add-streamer', {
+// Add streamer form
+router.get('/add', (req, res) => {
+  res.render('dashboard/add-streamer', {
     title: 'Add Streamer',
     user: req.user,
-    baseUrl,
-    errors: [],
-    values: {},
-    created: null,
+    baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
+    welcome: null,
   });
 });
 
-// Handle "Add streamer" submit
-router.post('/add-streamer', ensureUser, async (req, res) => {
-  const baseUrl = computeBaseUrl(req);
+// Handle add streamer submission
+router.post('/add', async (req, res) => {
   try {
-    const {
-      streamer_id = '',
-      username = '',
-      wallet_address = '',
-      token_address = '',
-    } = req.body || {};
+    const db = new DatabaseService();
+    const data = {
+      user_id: req.user.id, // ensure not null
+      twitch_username: req.body.twitch_username || null,
+      youtube_channel: req.body.youtube_channel || null,
+      kick_username: req.body.kick_username || null,
+      tts_enabled: req.body.tts_enabled ? true : false,
+    };
 
-    const errors = [];
-    if (!streamer_id.trim()) errors.push('Streamer ID is required.');
-    if (!wallet_address.trim()) errors.push('Wallet address is required.');
-
-    if (errors.length) {
-      return res.status(400).render('dashboard/add-streamer', {
-        title: 'Add Streamer',
-        user: req.user,
-        baseUrl,
-        errors,
-        values: { streamer_id, username, wallet_address, token_address },
-        created: null,
-      });
-    }
-
-    // IMPORTANT: always include the authenticated user's ID
-    const created = await req.databaseService.createStreamerConfig({
-      user_id: req.user.id,
-      streamer_id: streamer_id.trim(),
-      username: username.trim() || null,
-      wallet_address: wallet_address.trim(),
-      token_address: token_address.trim() || null,
-    });
-
-    return res.render('dashboard/add-streamer', {
-      title: 'Add Streamer',
-      user: req.user,
-      baseUrl,
-      errors: [],
-      values: { streamer_id: '', username: '', wallet_address: '', token_address: '' },
-      created,
-    });
+    await db.createStreamerConfig(data);
+    res.redirect('/dashboard?welcome=1');
   } catch (err) {
     console.error('Add streamer error:', err);
-    return res.status(500).render('dashboard/add-streamer', {
-      title: 'Add Streamer',
+    res.status(500).send('Error adding streamer');
+  }
+});
+
+// Edit streamer config
+router.get('/edit/:id', async (req, res) => {
+  try {
+    const db = new DatabaseService();
+    const streamer = await db.getStreamerConfigById(req.params.id);
+
+    if (!streamer || streamer.user_id !== req.user.id) {
+      return res.status(403).send('Forbidden');
+    }
+
+    res.render('dashboard/edit-streamer', {
+      title: 'Edit Streamer',
       user: req.user,
-      baseUrl,
-      errors: ['Failed to add streamer.'],
-      values: req.body || {},
-      created: null,
+      streamer,
+      baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
+      welcome: null,
     });
+  } catch (err) {
+    console.error('Edit streamer error:', err);
+    res.status(500).send('Error loading streamer config');
+  }
+});
+
+router.post('/edit/:id', async (req, res) => {
+  try {
+    const db = new DatabaseService();
+    const data = {
+      id: req.params.id,
+      user_id: req.user.id,
+      twitch_username: req.body.twitch_username || null,
+      youtube_channel: req.body.youtube_channel || null,
+      kick_username: req.body.kick_username || null,
+      tts_enabled: req.body.tts_enabled ? true : false,
+    };
+
+    await db.updateStreamerConfig(data);
+    res.redirect('/dashboard');
+  } catch (err) {
+    console.error('Update streamer error:', err);
+    res.status(500).send('Error updating streamer');
+  }
+});
+
+// Delete streamer
+router.post('/delete/:id', async (req, res) => {
+  try {
+    const db = new DatabaseService();
+    const streamer = await db.getStreamerConfigById(req.params.id);
+
+    if (!streamer || streamer.user_id !== req.user.id) {
+      return res.status(403).send('Forbidden');
+    }
+
+    await db.deleteStreamerConfig(req.params.id);
+    res.redirect('/dashboard');
+  } catch (err) {
+    console.error('Delete streamer error:', err);
+    res.status(500).send('Error deleting streamer');
   }
 });
 
