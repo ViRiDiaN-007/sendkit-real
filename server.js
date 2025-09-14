@@ -33,15 +33,15 @@ class SendKitApp {
     this.server = http.createServer(this.app);
     this.io = socketIo(this.server, {
       cors: {
-        origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-        methods: ["GET", "POST"]
+        origin: process.env.CORS_ORIGIN || 'https://sendkit.fun',
+        methods: ['GET', 'POST'],
+        credentials: true
       }
     });
-    
+
     this.port = process.env.PORT || 3000;
-    this.baseUrl = process.env.BASE_URL || `http://localhost:${this.port}`;
     this.db = null;
-    
+
     // Initialize services
     this.databaseService = new DatabaseService();
     this.ttsService = new TTSService();
@@ -49,11 +49,25 @@ class SendKitApp {
     this.pollService = new PollService();
     this.integratedPollService = new IntegratedPollService();
     this.automodService = new AutomodService();
-    
+
     this.setupMiddleware();
     this.setupPassport();
+    this.setupGlobals();     // <- add locals like baseUrl/services/welcome
     this.setupRoutes();
     this.setupSocketHandlers();
+  }
+
+  // Prefer env BASE_URL; otherwise derive from headers (works behind proxy)
+  computeBaseUrl(req) {
+    if (process.env.BASE_URL && process.env.BASE_URL.trim()) return process.env.BASE_URL.trim();
+
+    const proto =
+      (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'].split(',')[0]) ||
+      req.protocol ||
+      'https';
+
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+    return `${proto}://${host}`;
   }
 
   async initialize() {
@@ -61,23 +75,23 @@ class SendKitApp {
       // Initialize database
       await this.databaseService.initialize();
       console.log('✅ Database initialized');
-      
+
       // Initialize other services
       await this.ttsService.initialize();
       await this.integratedTTSService.initialize(this.databaseService, this.io);
       await this.pollService.initialize();
       await this.integratedPollService.initialize();
       await this.automodService.initialize();
-      
+
       // Set Socket.IO instance for IntegratedPollService
       this.integratedPollService.setSocketIO(this.io);
-      
+
       // Load existing streamers and start their poll bots
       await this.integratedPollService.setDatabaseServiceAndLoadStreamers(this.databaseService);
-      
+
       // Load existing streamers and start their TTS services
       await this.integratedTTSService.setDatabaseServiceAndLoadStreamers(this.databaseService);
-      
+
       console.log('✅ All services initialized');
     } catch (error) {
       console.error('❌ Failed to initialize services:', error);
@@ -86,6 +100,9 @@ class SendKitApp {
   }
 
   setupMiddleware() {
+    // We’re probably behind Nginx — trust proxy so rate-limit doesn’t complain
+    this.app.set('trust proxy', 1);
+
     // Security middleware
     this.app.use(helmet({
       contentSecurityPolicy: {
@@ -102,15 +119,15 @@ class SendKitApp {
 
     // Rate limiting
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
+      windowMs: 15 * 60 * 1000,
+      max: 100,
       message: 'Too many requests from this IP, please try again later.'
     });
     this.app.use('/api/', limiter);
 
     // CORS
     this.app.use(cors({
-      origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+      origin: process.env.CORS_ORIGIN || 'https://sendkit.fun',
       credentials: true
     }));
 
@@ -125,7 +142,7 @@ class SendKitApp {
       saveUninitialized: false,
       cookie: {
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000
       }
     }));
 
@@ -154,6 +171,16 @@ class SendKitApp {
       req.io = this.io;
       next();
     });
+
+    // Safety net: ensure POSTs to /dashboard carry user_id for DB writes
+    this.app.use((req, res, next) => {
+      if (req.method === 'POST' && req.path.startsWith('/dashboard')) {
+        if (!('user_id' in req.body) && req.user && req.user.id) {
+          req.body.user_id = req.user.id;
+        }
+      }
+      next();
+    });
   }
 
   setupPassport() {
@@ -163,14 +190,10 @@ class SendKitApp {
       async (email, password, done) => {
         try {
           const user = await this.databaseService.findUserByEmail(email);
-          if (!user) {
-            return done(null, false, { message: 'Invalid email or password' });
-          }
+          if (!user) return done(null, false, { message: 'Invalid email or password' });
 
           const isValidPassword = await bcrypt.compare(password, user.password);
-          if (!isValidPassword) {
-            return done(null, false, { message: 'Invalid email or password' });
-          }
+          if (!isValidPassword) return done(null, false, { message: 'Invalid email or password' });
 
           return done(null, user);
         } catch (error) {
@@ -179,12 +202,10 @@ class SendKitApp {
       }
     ));
 
-    // Serialize user for session
     passport.serializeUser((user, done) => {
       done(null, user.id);
     });
 
-    // Deserialize user from session
     passport.deserializeUser(async (id, done) => {
       try {
         const user = await this.databaseService.findUserById(id);
@@ -195,17 +216,50 @@ class SendKitApp {
     });
   }
 
+  // Provide safe defaults to every EJS template
+  setupGlobals() {
+    this.app.use((req, res, next) => {
+      // Base URL for templates like add-streamer.ejs
+      res.locals.baseUrl = process.env.BASE_URL && process.env.BASE_URL.trim()
+        ? process.env.BASE_URL.trim()
+        : this.computeBaseUrl(req);
+
+      // Service “online/offline” indicators (never undefined)
+      const ttsUp = typeof this.integratedTTSService?.isConnected === 'function'
+        ? this.integratedTTSService.isConnected()
+        : true;
+      const pollUp = typeof this.integratedPollService?.isConnected === 'function'
+        ? this.integratedPollService.isConnected()
+        : true;
+      const automodUp = typeof this.automodService?.isConnected === 'function'
+        ? this.automodService.isConnected()
+        : true;
+
+      res.locals.services = {
+        tts: !!ttsUp,
+        poll: !!pollUp,
+        automod: !!automodUp
+      };
+
+      // Commonly used locals
+      res.locals.user = req.user || null;
+      res.locals.welcome = false;
+
+      next();
+    });
+  }
+
   setupRoutes() {
     // Health check
     this.app.get('/health', (req, res) => {
-      res.json({ 
-        status: 'ok', 
+      res.json({
+        status: 'ok',
         timestamp: new Date().toISOString(),
         services: {
-          database: this.databaseService.pool ? true : false,
-          tts: this.integratedTTSService.isConnected(),
-          poll: this.integratedPollService.isConnected(),
-          automod: this.automodService.isConnected()
+          database: !!this.databaseService.pool,
+          tts: typeof this.integratedTTSService?.isConnected === 'function' ? this.integratedTTSService.isConnected() : true,
+          poll: typeof this.integratedPollService?.isConnected === 'function' ? this.integratedPollService.isConnected() : true,
+          automod: typeof this.automodService?.isConnected === 'function' ? this.automodService.isConnected() : true
         }
       });
     });
@@ -215,16 +269,16 @@ class SendKitApp {
       if (req.isAuthenticated()) {
         res.redirect('/dashboard');
       } else {
-        res.render('index', { 
+        res.render('index', {
           title: 'SendKit Dashboard',
-          user: req.user 
+          user: req.user
         });
       }
     });
 
     // Auth routes
     this.app.use('/auth', authRoutes);
-    
+
     // Protected routes
     this.app.use('/dashboard', this.requireAuth, dashboardRoutes);
     this.app.use('/tts', this.requireAuth, ttsRoutes);
@@ -235,14 +289,14 @@ class SendKitApp {
 
     // Browser source routes (public)
     this.app.get('/browser-source/tts/:streamerId', (req, res) => {
-      res.render('browser-sources/tts', { 
+      res.render('browser-sources/tts', {
         streamerId: req.params.streamerId,
         title: 'TTS Browser Source'
       });
     });
 
     this.app.get('/browser-source/poll/:streamerId', (req, res) => {
-      res.render('browser-sources/poll', { 
+      res.render('browser-sources/poll', {
         streamerId: req.params.streamerId,
         title: 'Poll Browser Source'
       });
@@ -250,7 +304,7 @@ class SendKitApp {
 
     // 404 handler
     this.app.use((req, res) => {
-      res.status(404).render('error', { 
+      res.status(404).render('error', {
         title: 'Page Not Found',
         message: 'The page you are looking for does not exist.',
         user: req.user
@@ -260,7 +314,7 @@ class SendKitApp {
     // Error handler
     this.app.use((err, req, res, next) => {
       console.error('Error:', err);
-      res.status(500).render('error', { 
+      res.status(500).render('error', {
         title: 'Server Error',
         message: 'An unexpected error occurred.',
         user: req.user
@@ -294,21 +348,23 @@ class SendKitApp {
 
   // Middleware to require authentication
   requireAuth(req, res, next) {
-    if (req.isAuthenticated()) {
-      return next();
-    }
+    if (req.isAuthenticated()) return next();
     res.redirect('/auth/login');
   }
 
   async start() {
     try {
       await this.initialize();
-      
+
+      const shownBase =
+        (process.env.BASE_URL && process.env.BASE_URL.trim()) ||
+        `http://localhost:${this.port}`;
+
       this.server.listen(this.port, () => {
         console.log(`🚀 SendKit Dashboard running on port ${this.port}`);
-        console.log(`📱 Web interface: ${this.baseUrl}`);
-        console.log(`🔗 API endpoint: ${this.baseUrl}/api`);
-        console.log(`🎯 Browser sources: ${this.baseUrl}/browser-source/`);
+        console.log(`📱 Web interface: ${shownBase}`);
+        console.log(`🔗 API endpoint: ${shownBase}/api`);
+        console.log(`🎯 Browser sources: ${shownBase}/browser-source/`);
       });
     } catch (error) {
       console.error('❌ Failed to start server:', error);
