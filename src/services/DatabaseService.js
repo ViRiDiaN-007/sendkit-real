@@ -1,4 +1,3 @@
-// src/services/DatabaseService.js
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
@@ -10,7 +9,7 @@ class DatabaseService {
     if (this.dbType === 'postgresql') {
       this.pool = new Pool({
         host: process.env.DB_HOST || 'localhost',
-        port: Number(process.env.DB_PORT || 5432),
+        port: process.env.DB_PORT || 5432,
         database: process.env.DB_NAME || 'sendkit_db',
         user: process.env.DB_USER || 'sendkit_user',
         password: process.env.DB_PASSWORD || 'ULouSCHRIeraTsECTU',
@@ -20,8 +19,6 @@ class DatabaseService {
       });
     }
   }
-
-  /* ---------------------------- lifecycle & utils --------------------------- */
 
   async initialize() {
     try {
@@ -38,29 +35,6 @@ class DatabaseService {
       throw error;
     }
   }
-
-  async query(text, params = []) {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(text, params);
-      return result;
-    } finally {
-      client.release();
-    }
-  }
-
-  isConnected() {
-    return this.pool !== null;
-  }
-
-  async close() {
-    if (this.pool) {
-      await this.pool.end();
-      this.pool = null;
-    }
-  }
-
-  /* --------------------------------- schema -------------------------------- */
 
   async createTables() {
     const queries = [
@@ -89,8 +63,8 @@ class DatabaseService {
       )`
     ];
 
-    for (const q of queries) {
-      await this.query(q);
+    for (const query of queries) {
+      await this.query(query);
     }
   }
 
@@ -119,86 +93,86 @@ class DatabaseService {
     }
   }
 
-  /* ---------------------------------- users --------------------------------- */
-
-  async createUser(userData) {
-    const {
-      email,
-      password,
-      username,
-      wallet_address = null,
-      streamer_id = null,
-      is_admin = false
-    } = userData;
-
-    const sql = `
-      INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin)
-      VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING *`;
-    const res = await this.query(sql, [email, password, username, wallet_address, streamer_id, is_admin]);
-    return res.rows[0];
+  async query(text, params = []) {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(text, params);
+      return result;
+    } finally {
+      client.release();
+    }
   }
 
-  // alias to align with routes
+  // --- USERS ---
+  async createUser(userData) {
+    const { email, password, username, wallet_address, streamer_id, is_admin = false } = userData;
+    const query = `INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin)
+                   VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`;
+    const result = await this.query(query, [email, password, username, wallet_address, streamer_id, is_admin]);
+    return result.rows[0];
+  }
+
   async getUserByEmail(email) {
-    const res = await this.query('SELECT * FROM users WHERE email = $1', [email]);
-    return res.rows[0] || null;
+    const query = 'SELECT * FROM users WHERE email = $1';
+    const result = await this.query(query, [email]);
+    return result.rows[0];
   }
 
   async getUserById(id) {
-    const res = await this.query('SELECT * FROM users WHERE id = $1', [id]);
-    return res.rows[0] || null;
+    const query = 'SELECT * FROM users WHERE id = $1';
+    const result = await this.query(query, [id]);
+    return result.rows[0];
   }
 
   async getUserByUsername(username) {
-    const res = await this.query('SELECT * FROM users WHERE username = $1', [username]);
-    return res.rows[0] || null;
+    const query = 'SELECT * FROM users WHERE username = $1';
+    const result = await this.query(query, [username]);
+    return result.rows[0];
   }
 
-  /* ------------------------------ streamer cfgs ----------------------------- */
-
-  async createStreamerConfig(data) {
-    // Expecting routes to pass user_id; guard to make failures obvious
-    const {
-      user_id,
-      streamer_id,
-      username = null,
-      wallet_address,
-      token_address = null,
-      is_active = true
-    } = data || {};
-
-    if (!user_id) throw new Error('createStreamerConfig requires user_id');
-    if (!streamer_id) throw new Error('createStreamerConfig requires streamer_id');
-    if (!wallet_address) throw new Error('createStreamerConfig requires wallet_address');
-
-    const sql = `
-      INSERT INTO streamer_configs
-        (user_id, streamer_id, username, wallet_address, token_address, is_active)
-      VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING *`;
-    const res = await this.query(sql, [
-      user_id, streamer_id, username, wallet_address, token_address, is_active
-    ]);
-    return res.rows[0];
-  }
-
-  async getStreamerConfigsByUserId(userId) {
-    const res = await this.query(
-      'SELECT * FROM streamer_configs WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
-    );
-    return res.rows;
-  }
-
+  // --- STREAMER CONFIGS ---
   async getStreamers() {
-    const res = await this.query('SELECT * FROM streamer_configs WHERE is_active = TRUE');
-    return res.rows;
+    const query = 'SELECT * FROM streamer_configs WHERE is_active = TRUE';
+    const result = await this.query(query);
+    return result.rows;
   }
 
   async getAllStreamerConfigs() {
-    // Keep compatibility with Integrated* services
     return this.getStreamers();
+  }
+
+  async getStreamerConfigsByUserId(userId) {
+    const query = 'SELECT * FROM streamer_configs WHERE user_id = $1';
+    const result = await this.query(query, [userId]);
+    return result.rows;
+  }
+
+  async createStreamerConfig(config) {
+    const { user_id, streamer_id, username, wallet_address, token_address } = config;
+    const query = `INSERT INTO streamer_configs (user_id, streamer_id, username, wallet_address, token_address)
+                   VALUES ($1, $2, $3, $4, $5) RETURNING *`;
+    const result = await this.query(query, [user_id, streamer_id, username, wallet_address, token_address]);
+    return result.rows[0];
+  }
+
+  // --- COMPATIBILITY ALIASES ---
+  async findUserByEmail(email) {
+    return this.getUserByEmail(email);
+  }
+
+  async findUserByUsername(username) {
+    return this.getUserByUsername(username);
+  }
+
+  isConnected() {
+    return this.pool !== null;
+  }
+
+  async close() {
+    if (this.pool) {
+      await this.pool.end();
+      this.pool = null;
+    }
   }
 }
 
