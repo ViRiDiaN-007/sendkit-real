@@ -5,51 +5,62 @@ const bcrypt = require('bcryptjs');
 class DatabaseService {
   constructor() {
     this.pool = null;
-
-    // DB envs (PostgreSQL)
     this.dbType = process.env.DB_TYPE || 'postgresql';
-    this.dbHost = process.env.DB_HOST || 'localhost';
-    this.dbPort = Number(process.env.DB_PORT || 5432);
-    this.dbName = process.env.DB_NAME || 'sendkit_db';
-    this.dbUser = process.env.DB_USER || 'sendkit_user';
-    this.dbPassword = process.env.DB_PASSWORD || 'ULouSCHRIeraTsECTU';
+
+    if (this.dbType === 'postgresql') {
+      this.pool = new Pool({
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT || 5432),
+        database: process.env.DB_NAME || 'sendkit_db',
+        user: process.env.DB_USER || 'sendkit_user',
+        password: process.env.DB_PASSWORD || 'ULouSCHRIeraTsECTU',
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
+    }
+  }
+
+  /* ---------------------------- lifecycle & utils --------------------------- */
+
+  async initialize() {
+    try {
+      if (this.dbType === 'postgresql') {
+        const client = await this.pool.connect();
+        console.log('✅ PostgreSQL connection established');
+        client.release();
+        await this.createTables();
+        await this.createDefaultAdmin();
+        console.log('✅ PostgreSQL database initialized successfully');
+      }
+    } catch (error) {
+      console.error('❌ Database initialization failed:', error);
+      throw error;
+    }
+  }
+
+  async query(text, params = []) {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(text, params);
+      return result;
+    } finally {
+      client.release();
+    }
   }
 
   isConnected() {
     return this.pool !== null;
   }
 
-  async initialize() {
-    if (this.dbType !== 'postgresql') {
-      throw new Error(`Unsupported DB_TYPE: ${this.dbType}. Only 'postgresql' is supported in DatabaseService.`);
-    }
-
-    if (!this.pool) {
-      this.pool = new Pool({
-        host: this.dbHost,
-        port: this.dbPort,
-        database: this.dbName,
-        user: this.dbUser,
-        password: this.dbPassword,
-        max: 20,
-        idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 2_000,
-      });
-    }
-
-    try {
-      const client = await this.pool.connect();
-      console.log('✅ PostgreSQL connection established');
-      client.release();
-
-      await this.createTables();
-      await this.createDefaultAdmin();
-      console.log('✅ PostgreSQL database initialized successfully');
-    } catch (err) {
-      console.error('❌ Database initialization failed:', err);
-      throw err;
+  async close() {
+    if (this.pool) {
+      await this.pool.end();
+      this.pool = null;
     }
   }
+
+  /* --------------------------------- schema -------------------------------- */
 
   async createTables() {
     const queries = [
@@ -84,61 +95,100 @@ class DatabaseService {
   }
 
   async createDefaultAdmin() {
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@pump.fun';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
-    const existing = await this.findUserByEmail(adminEmail);
-    if (existing) {
-      console.log('✅ Admin user already exists');
-      return;
-    }
-
-    const hashed = await bcrypt.hash(adminPassword, 12);
-    await this.createUser({
-      email: adminEmail,
-      password: hashed,
-      username: 'admin',
-      is_admin: true
-    });
-
-    console.log('✅ Default admin user created');
-  }
-
-  async query(text, params = []) {
-    const client = await this.pool.connect();
     try {
-      return await client.query(text, params);
-    } finally {
-      client.release();
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@pump.fun';
+      const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+      const existingAdmin = await this.getUserByEmail(adminEmail);
+      if (existingAdmin) {
+        console.log('✅ Admin user already exists');
+        return;
+      }
+
+      const hashedPassword = await bcrypt.hash(adminPassword, 12);
+      await this.createUser({
+        email: adminEmail,
+        password: hashedPassword,
+        username: 'admin',
+        is_admin: true
+      });
+
+      console.log('✅ Default admin user created');
+    } catch (error) {
+      console.error('❌ Failed to create default admin:', error);
     }
   }
+
+  /* ---------------------------------- users --------------------------------- */
 
   async createUser(userData) {
-    const { email, password, username, wallet_address = null, streamer_id = null, is_admin = false } = userData;
+    const {
+      email,
+      password,
+      username,
+      wallet_address = null,
+      streamer_id = null,
+      is_admin = false
+    } = userData;
+
     const sql = `
       INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING *`;
     const res = await this.query(sql, [email, password, username, wallet_address, streamer_id, is_admin]);
     return res.rows[0];
   }
 
-  async findUserByEmail(email) {
+  // alias to align with routes
+  async getUserByEmail(email) {
     const res = await this.query('SELECT * FROM users WHERE email = $1', [email]);
-    return res.rows[0];
+    return res.rows[0] || null;
   }
 
-  async findUserById(id) {
+  async getUserById(id) {
     const res = await this.query('SELECT * FROM users WHERE id = $1', [id]);
+    return res.rows[0] || null;
+  }
+
+  async getUserByUsername(username) {
+    const res = await this.query('SELECT * FROM users WHERE username = $1', [username]);
+    return res.rows[0] || null;
+  }
+
+  /* ------------------------------ streamer cfgs ----------------------------- */
+
+  async createStreamerConfig(data) {
+    // Expecting routes to pass user_id; guard to make failures obvious
+    const {
+      user_id,
+      streamer_id,
+      username = null,
+      wallet_address,
+      token_address = null,
+      is_active = true
+    } = data || {};
+
+    if (!user_id) throw new Error('createStreamerConfig requires user_id');
+    if (!streamer_id) throw new Error('createStreamerConfig requires streamer_id');
+    if (!wallet_address) throw new Error('createStreamerConfig requires wallet_address');
+
+    const sql = `
+      INSERT INTO streamer_configs
+        (user_id, streamer_id, username, wallet_address, token_address, is_active)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING *`;
+    const res = await this.query(sql, [
+      user_id, streamer_id, username, wallet_address, token_address, is_active
+    ]);
     return res.rows[0];
   }
 
-  // 🔧 Compatibility shims expected by routes/middleware
-  async getUserByEmail(email) {            // req.databaseService.getUserByEmail(...)
-    return this.findUserByEmail(email);
-  }
-  async getUserById(id) {                  // if something expects this name
-    return this.findUserById(id);
+  async getStreamerConfigsByUserId(userId) {
+    const res = await this.query(
+      'SELECT * FROM streamer_configs WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    return res.rows;
   }
 
   async getStreamers() {
@@ -147,14 +197,8 @@ class DatabaseService {
   }
 
   async getAllStreamerConfigs() {
+    // Keep compatibility with Integrated* services
     return this.getStreamers();
-  }
-
-  async close() {
-    if (this.pool) {
-      await this.pool.end();
-      this.pool = null;
-    }
   }
 }
 
