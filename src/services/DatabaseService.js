@@ -103,7 +103,7 @@ class DatabaseService {
     }
   }
 
-  // --- USERS ---
+  // ---------- USERS ----------
   async createUser(userData) {
     const { email, password, username, wallet_address, streamer_id, is_admin = false } = userData;
     const query = `INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin)
@@ -130,7 +130,7 @@ class DatabaseService {
     return result.rows[0];
   }
 
-  // --- STREAMER CONFIGS ---
+  // ---------- STREAMER CONFIGS ----------
   async getStreamers() {
     const query = 'SELECT * FROM streamer_configs WHERE is_active = TRUE';
     const result = await this.query(query);
@@ -155,11 +155,13 @@ class DatabaseService {
     return result.rows[0];
   }
 
-  // --- COMPATIBILITY ALIASES ---
+  // ---------- COMPATIBILITY ALIASES ----------
   async findUserByEmail(email) {
     return this.getUserByEmail(email);
   }
-
+  async findUserById(id) {
+    return this.getUserById(id);
+  }
   async findUserByUsername(username) {
     return this.getUserByUsername(username);
   }
