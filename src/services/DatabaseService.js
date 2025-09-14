@@ -1,38 +1,54 @@
+// src/services/DatabaseService.js
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
 class DatabaseService {
   constructor() {
     this.pool = null;
+
+    // DB envs (PostgreSQL)
     this.dbType = process.env.DB_TYPE || 'postgresql';
-    
-    if (this.dbType === 'postgresql') {
-      this.pool = new Pool({
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 5432,
-        database: process.env.DB_NAME || 'sendkit_db',
-        user: process.env.DB_USER || 'sendkit_user',
-        password: process.env.DB_PASSWORD || 'ULouSCHRIeraTsECTU',
-        max: 20,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      });
-    }
+    this.dbHost = process.env.DB_HOST || 'localhost';
+    this.dbPort = Number(process.env.DB_PORT || 5432);
+    this.dbName = process.env.DB_NAME || 'sendkit_db';
+    this.dbUser = process.env.DB_USER || 'sendkit_user';
+    this.dbPassword = process.env.DB_PASSWORD || 'ULouSCHRIeraTsECTU';
+  }
+
+  isConnected() {
+    return this.pool !== null;
   }
 
   async initialize() {
+    if (this.dbType !== 'postgresql') {
+      throw new Error(`Unsupported DB_TYPE: ${this.dbType}. Only 'postgresql' is supported in DatabaseService.`);
+    }
+
+    // Create pool lazily on first initialize()
+    if (!this.pool) {
+      this.pool = new Pool({
+        host: this.dbHost,
+        port: this.dbPort,
+        database: this.dbName,
+        user: this.dbUser,
+        password: this.dbPassword,
+        max: 20,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 2_000,
+      });
+    }
+
     try {
-      if (this.dbType === 'postgresql') {
-        const client = await this.pool.connect();
-        console.log('✅ PostgreSQL connection established');
-        client.release();
-        await this.createTables();
-        await this.createDefaultAdmin();
-        console.log('✅ PostgreSQL database initialized successfully');
-      }
-    } catch (error) {
-      console.error('❌ Database initialization failed:', error);
-      throw error;
+      const client = await this.pool.connect();
+      console.log('✅ PostgreSQL connection established');
+      client.release();
+
+      await this.createTables();
+      await this.createDefaultAdmin();
+      console.log('✅ PostgreSQL database initialized successfully');
+    } catch (err) {
+      console.error('❌ Database initialization failed:', err);
+      throw err;
     }
   }
 
@@ -63,77 +79,69 @@ class DatabaseService {
       )`
     ];
 
-    for (const query of queries) {
-      await this.query(query);
+    for (const q of queries) {
+      await this.query(q);
     }
   }
 
   async createDefaultAdmin() {
-    try {
-      const adminEmail = process.env.ADMIN_EMAIL || 'admin@pump.fun';
-      const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-      
-      const existingAdmin = await this.findUserByEmail(adminEmail);
-      if (existingAdmin) {
-        console.log('✅ Admin user already exists');
-        return;
-      }
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@pump.fun';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
-      const hashedPassword = await bcrypt.hash(adminPassword, 12);
-      await this.createUser({
-        email: adminEmail,
-        password: hashedPassword,
-        username: 'admin',
-        is_admin: true
-      });
-
-      console.log('✅ Default admin user created');
-    } catch (error) {
-      console.error('❌ Failed to create default admin:', error);
+    const existing = await this.findUserByEmail(adminEmail);
+    if (existing) {
+      console.log('✅ Admin user already exists');
+      return;
     }
+
+    const hashed = await bcrypt.hash(adminPassword, 12);
+    await this.createUser({
+      email: adminEmail,
+      password: hashed,
+      username: 'admin',
+      is_admin: true
+    });
+
+    console.log('✅ Default admin user created');
   }
 
   async query(text, params = []) {
     const client = await this.pool.connect();
     try {
-      const result = await client.query(text, params);
-      return result;
+      return await client.query(text, params);
     } finally {
       client.release();
     }
   }
 
   async createUser(userData) {
-    const { email, password, username, wallet_address, streamer_id, is_admin = false } = userData;
-    const query = `INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`;
-    const result = await this.query(query, [email, password, username, wallet_address, streamer_id, is_admin]);
-    return result.rows[0];
+    const { email, password, username, wallet_address = null, streamer_id = null, is_admin = false } = userData;
+    const sql = `
+      INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *`;
+    const res = await this.query(sql, [email, password, username, wallet_address, streamer_id, is_admin]);
+    return res.rows[0];
   }
 
   async findUserByEmail(email) {
-    const query = 'SELECT * FROM users WHERE email = $1';
-    const result = await this.query(query, [email]);
-    return result.rows[0];
+    const res = await this.query('SELECT * FROM users WHERE email = $1', [email]);
+    return res.rows[0];
   }
 
   async findUserById(id) {
-    const query = 'SELECT * FROM users WHERE id = $1';
-    const result = await this.query(query, [id]);
-    return result.rows[0];
+    const res = await this.query('SELECT * FROM users WHERE id = $1', [id]);
+    return res.rows[0];
   }
 
   async getStreamers() {
-    const query = 'SELECT * FROM streamer_configs WHERE is_active = TRUE';
-    const result = await this.query(query);
-    return result.rows;
+    const res = await this.query('SELECT * FROM streamer_configs WHERE is_active = TRUE');
+    return res.rows;
   }
 
+  // Used by IntegratedTTSService & IntegratedPollService
   async getAllStreamerConfigs() {
     return this.getStreamers();
-  }
-
-  isConnected() {
-    return this.pool !== null;
   }
 
   async close() {
