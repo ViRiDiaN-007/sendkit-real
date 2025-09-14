@@ -24,7 +24,6 @@ class DatabaseService {
       throw new Error(`Unsupported DB_TYPE: ${this.dbType}. Only 'postgresql' is supported in DatabaseService.`);
     }
 
-    // Create pool lazily on first initialize()
     if (!this.pool) {
       this.pool = new Pool({
         host: this.dbHost,
@@ -134,12 +133,19 @@ class DatabaseService {
     return res.rows[0];
   }
 
+  // 🔧 Compatibility shims expected by routes/middleware
+  async getUserByEmail(email) {            // req.databaseService.getUserByEmail(...)
+    return this.findUserByEmail(email);
+  }
+  async getUserById(id) {                  // if something expects this name
+    return this.findUserById(id);
+  }
+
   async getStreamers() {
     const res = await this.query('SELECT * FROM streamer_configs WHERE is_active = TRUE');
     return res.rows;
   }
 
-  // Used by IntegratedTTSService & IntegratedPollService
   async getAllStreamerConfigs() {
     return this.getStreamers();
   }
