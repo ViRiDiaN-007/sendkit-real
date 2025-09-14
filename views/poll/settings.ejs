@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body class="bg-dark-bg text-white min-h-screen relative overflow-hidden">
+    <!-- Subtle pulsing background lights -->
+    <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-green-400/30 rounded-full blur-3xl animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-48 h-48 bg-green-600/30 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+    <div class="absolute top-1/2 left-1/2 w-16 h-16 bg-green-500/25 rounded-full blur-2xl animate-pulse" style="animation-delay: 2s;"></div>
+    
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">P</span>
+                        </div>
+                        <span class="text-xl font-bold text-green-400">SendKit</span>
+                    </a>
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="/dashboard" class="text-gray-300 hover:text-green-400 transition-colors duration-200">Dashboard</a>
+                    <div class="relative group">
+                        <button class="text-gray-300 hover:text-green-400 transition-colors duration-200 flex items-center">
+                            Settings
+                            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- User Profile -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative group">
+                        <button class="flex items-center space-x-2 text-gray-300 hover:text-green-400 transition-colors duration-200">
+                            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                <span class="text-white font-bold text-sm">V</span>
+                            </div>
+                            <span>Viri</span>
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="text-gray-300 hover:text-green-400">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Header -->
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white"><%= title %></h1>
+                        <p class="mt-2 text-gray-400">Configure poll settings and manage live polls for your stream</p>
+                    </div>
+                    <div class="flex space-x-3">
+                        <a href="/dashboard" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flash Messages -->
+            <% if (typeof messages !== 'undefined' && messages.error) { %>
+                <div class="mb-6 bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg">
+                    <%= messages.error %>
+                </div>
+            <% } %>
+            <% if (typeof messages !== 'undefined' && messages.success) { %>
+                <div class="mb-6 bg-green-900/20 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg">
+                    <%= messages.success %>
+                </div>
+            <% } %>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Poll Settings -->
+                <div class="bg-dark-card rounded-lg shadow-sm border border-dark-border">
+                    <div class="px-6 py-4 border-b border-dark-border">
+                        <h2 class="text-xl font-semibold text-white">Poll Configuration</h2>
+                        <p class="text-sm text-gray-400">Configure how polls work for your stream</p>
+                    </div>
+                    
+                    <form method="POST" action="/integrated-poll/<%= streamer.streamer_id %>/settings" class="p-6 space-y-6">
+                        <!-- Enable Polls -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="text-sm font-medium text-gray-300">Enable Polls</label>
+                                <p class="text-sm text-gray-400">Allow polls to be created in your chat</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="enabled" class="sr-only peer" <%= pollSettings.enabled ? 'checked' : '' %>>
+                                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
+
+                        <!-- Default Duration -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Default Poll Duration (seconds)</label>
+                            <input type="number" name="defaultDuration" value="<%= pollSettings.defaultDuration || 60 %>" min="10" max="300"
+                                   class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white">
+                        </div>
+
+                        <!-- Allow Viewer Polls -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="text-sm font-medium text-gray-300">Allow Viewer Polls</label>
+                                <p class="text-sm text-gray-400">Let viewers create polls via chat commands</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="allowViewerPolls" class="sr-only peer" <%= pollSettings.allowViewerPolls ? 'checked' : '' %>>
+                                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
+
+                        <!-- Require Donation -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="text-sm font-medium text-gray-300">Require Donation</label>
+                                <p class="text-sm text-gray-400">Require a donation to create polls</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="requireDonation" class="sr-only peer" <%= pollSettings.requireDonation ? 'checked' : '' %>>
+                                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
+
+                        <!-- Min Donation -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Minimum Donation (SOL)</label>
+                            <input type="number" name="minDonation" value="<%= pollSettings.minDonation || 0.01 %>" min="0" step="0.01"
+                                   class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white">
+                        </div>
+
+                        <div class="pt-4 border-t border-dark-border">
+                            <button type="submit" class="w-full bg-green-500 hover:from-green-500 hover:to-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                                Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Poll Management Section -->
+                <div class="bg-dark-card rounded-lg shadow-sm border border-dark-border">
+                    <div class="px-6 py-4 border-b border-dark-border">
+                        <h2 class="text-xl font-semibold text-white">Poll Management</h2>
+                        <p class="text-sm text-gray-400">Create and manage polls for your stream</p>
+                    </div>
+                    <div class="p-6">
+                        <!-- Poll Creation Form -->
+                        <div id="poll-creation-form" class="space-y-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Poll Question</label>
+                                <input type="text" id="poll-question" placeholder="Enter your poll question..." 
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white placeholder-gray-400">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Poll Options</label>
+                                <div id="poll-options" class="space-y-2">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" placeholder="Option 1" 
+                                               class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white placeholder-gray-400">
+                                        <button type="button" class="remove-option text-red-400 hover:text-red-300 p-1" style="display: none;">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" placeholder="Option 2" 
+                                               class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white placeholder-gray-400">
+                                        <button type="button" class="remove-option text-red-400 hover:text-red-300 p-1" style="display: none;">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" id="add-option" class="mt-2 text-green-400 hover:text-green-600 text-sm font-medium">
+                                    + Add Option
+                                </button>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Duration (seconds)</label>
+                                    <input type="number" id="poll-duration" value="60" min="10" max="300" 
+                                           class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Max Options</label>
+                                    <input type="number" id="max-options" value="4" min="2" max="10" 
+                                           class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Poll Display -->
+                        <div id="active-poll-display" class="hidden">
+                            <div class="bg-dark-bg rounded-lg p-4 border border-dark-border mb-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 id="active-poll-question" class="text-lg font-medium text-white"></h3>
+                                    <div class="flex items-center space-x-2">
+                                        <span id="poll-timer" class="text-sm text-pump-purple font-medium"></span>
+                                        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                    </div>
+                                </div>
+                                <div id="poll-options-display" class="space-y-2 mb-4">
+                                    <!-- Options will be populated here -->
+                                </div>
+                                <div class="flex items-center justify-between text-sm text-gray-400">
+                                    <span id="total-votes">Total votes: 0</span>
+                                    <span id="poll-status">Live</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button id="end-poll-btn" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                                    End Poll
+                                </button>
+                                <button id="view-results-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                                    View Results
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex justify-end space-x-2 pt-4 border-t border-dark-border">
+                            <button id="create-poll-btn" class="bg-green-500 hover:from-green-500 hover:to-green-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                                Create Poll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Whitelist Management -->
+                <div class="bg-dark-card rounded-lg shadow-sm border border-dark-border">
+                    <div class="px-6 py-4 border-b border-dark-border">
+                        <h2 class="text-xl font-semibold text-white">Whitelist Management</h2>
+                        <p class="text-sm text-gray-400">Manage who can create polls</p>
+                    </div>
+                    
+                    <div class="p-6 space-y-4">
+                        <!-- Add Address Form -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Add Solana Address</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="whitelist-address" placeholder="Enter Solana address" 
+                                       class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white placeholder-gray-400 font-mono text-sm">
+                                <button type="button" id="add-whitelist-btn"
+                                        class="px-4 py-2 bg-green-500 hover:from-green-500 hover:to-green-700 text-white rounded-lg transition-colors">
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Whitelist List -->
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-300 mb-2">Whitelisted Addresses</h3>
+                            <div id="whitelist-list" class="space-y-2 max-h-64 overflow-y-auto">
+                                <div class="text-center text-gray-400 py-4">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pump-purple mx-auto mb-2"></div>
+                                    Loading whitelist...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Whitelist Info -->
+                        <div class="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                            <div class="flex items-start space-x-2">
+                                <svg class="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                                <div class="text-sm text-blue-300">
+                                    <p class="font-medium">Whitelist Commands</p>
+                                    <p class="mt-1">Users can use these commands in chat:</p>
+                                    <ul class="mt-1 space-y-1 text-xs">
+                                        <li>• <code>/whitelist list</code> - Show whitelist</li>
+                                        <li>• <code>/whitelist me</code> - Add themselves (if their username is a Solana address)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browser Source -->
+            <div class="mt-8 bg-dark-card rounded-lg shadow-sm border border-dark-border">
+                <div class="px-6 py-4 border-b border-dark-border">
+                    <h3 class="text-lg font-semibold text-white">OBS Browser Source</h3>
+                </div>
+                <div class="p-6">
+                    <div class="flex">
+                        <input type="text" readonly value="<%= browserSourceUrl %>" 
+                               class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-l-lg text-white font-mono text-sm">
+                        <button class="copy-btn px-3 py-2 bg-green-500 text-white rounded-r-lg hover:from-green-500 hover:to-green-700 transition-colors" 
+                                data-url="<%= browserSourceUrl %>">
+                            Copy
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">Add this URL as a browser source in OBS to display polls on your stream</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark-card border-t border-dark-border mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-sm">P</span>
+                        </div>
+                        <span class="text-lg font-bold text-green-400">SendKit</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Professional streaming tools for content creators.</p>
+                </div>
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Quick Links</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="/dashboard" class="text-gray-400 hover:text-green-400 transition-colors">Dashboard</a></li>
+                        <li><a href="/dashboard/add-streamer" class="text-gray-400 hover:text-green-400 transition-colors">Add Streamer</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-green-400 transition-colors">Documentation</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Support</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="text-gray-400 hover:text-green-400 transition-colors">Help Center</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-green-400 transition-colors">Contact Support</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-green-400 transition-colors">Discord</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-dark-border mt-8 pt-8 text-center">
+                <p class="text-gray-400 text-sm">© 2024 SendKit. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    // Streamer ID for API calls
+    const streamerId = '<%= streamer.streamer_id %>';
+    
+    // Add event listeners when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        const copyButtons = document.querySelectorAll('.copy-btn');
+        copyButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const url = this.getAttribute('data-url');
+                copyToClipboard(url);
+            });
+        });
+    });
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                showNotification('URL copied to clipboard!', 'success');
+            }).catch(function(err) {
+                console.error('Clipboard API failed:', err);
+                fallbackCopyTextToClipboard(text);
+            });
+        } else {
+            fallbackCopyTextToClipboard(text);
+        }
+    }
+
+    function fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showNotification('URL copied to clipboard!', 'success');
+            } else {
+                showNotification('Failed to copy. Please copy manually: ' + text, 'error');
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            showNotification('Failed to copy. Please copy manually: ' + text, 'error');
+        }
+        
+        document.body.removeChild(textArea);
+    }
+
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-red-900/20 border-red-500 text-red-400';
+        notification.className = `fixed top-4 right-4 z-50 ${bgColor} border px-4 py-2 rounded-lg text-sm max-w-md`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+    function endPoll(pollId) {
+        if (confirm('Are you sure you want to end this poll?')) {
+            fetch(`/poll/${streamerId}/end/${pollId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    showNotification('Failed to end poll: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Failed to end poll', 'error');
+            });
+        }
+    }
+
+    // Poll Management Functions
+    let pollTimer = null;
+    let currentPoll = null;
+
+    function showCreatePollModal() {
+        // Show the poll creation form (now always visible)
+        document.getElementById('active-poll-display').classList.add('hidden');
+        document.getElementById('create-poll-btn').textContent = 'Create Poll';
+    }
+
+    function hideCreatePollModal() {
+        // Hide the poll creation form (now always visible)
+        document.getElementById('create-poll-btn').textContent = 'Create Poll';
+    }
+
+    function resetPollForm() {
+        // Reset the poll creation form
+        document.getElementById('poll-question').value = '';
+        document.getElementById('poll-duration').value = '60';
+        
+        // Reset options to default 2 options
+        const optionsContainer = document.getElementById('poll-options');
+        optionsContainer.innerHTML = '';
+        
+        // Add 2 default option inputs
+        for (let i = 0; i < 2; i++) {
+            addPollOption();
+        }
+    }
+
+    function addPollOption() {
+        const optionsContainer = document.getElementById('poll-options');
+        const maxOptions = parseInt(document.getElementById('max-options').value);
+        const currentOptions = optionsContainer.children.length;
+        
+        if (currentOptions >= maxOptions) {
+            showNotification(`Maximum ${maxOptions} options allowed`, 'warning');
+            return;
+        }
+
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'flex items-center space-x-2';
+        optionDiv.innerHTML = `
+            <input type="text" placeholder="Option ${currentOptions + 1}" 
+                   class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-green-400 focus:border-pump-purple text-white placeholder-gray-400">
+            <button type="button" class="remove-option text-red-400 hover:text-red-300 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        `;
+        
+        optionsContainer.appendChild(optionDiv);
+        updateRemoveButtons();
+    }
+
+    function removePollOption(button) {
+        const optionsContainer = document.getElementById('poll-options');
+        if (optionsContainer.children.length > 2) {
+            button.parentElement.remove();
+            updateRemoveButtons();
+        }
+    }
+
+    function updateRemoveButtons() {
+        const optionsContainer = document.getElementById('poll-options');
+        const removeButtons = optionsContainer.querySelectorAll('.remove-option');
+        
+        removeButtons.forEach((button, index) => {
+            if (optionsContainer.children.length > 2) {
+                button.style.display = 'block';
+            } else {
+                button.style.display = 'none';
+            }
+        });
+    }
+
+    function createPoll() {
+        const question = document.getElementById('poll-question').value.trim();
+        const options = Array.from(document.querySelectorAll('#poll-options input'))
+            .map(input => input.value.trim())
+            .filter(option => option.length > 0);
+        const duration = parseInt(document.getElementById('poll-duration').value);
+
+        if (!question) {
+            showNotification('Please enter a poll question', 'error');
+            return;
+        }
+
+        if (options.length < 2) {
+            showNotification('Please enter at least 2 options', 'error');
+            return;
+        }
+
+        fetch(`/poll/${streamerId}/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question: question,
+                options: options,
+                duration: duration
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Poll created successfully!', 'success');
+                hideCreatePollModal();
+                displayActivePoll(data.poll);
+                startPollTimer(duration);
+                resetPollForm();
+            } else {
+                showNotification('Failed to create poll: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error creating poll:', error);
+            showNotification('Error creating poll', 'error');
+        });
+    }
+
+    function displayActivePoll(poll) {
+        currentPoll = poll;
+        document.getElementById('active-poll-display').classList.remove('hidden');
+        document.getElementById('active-poll-question').textContent = poll.question;
+        
+        const optionsDisplay = document.getElementById('poll-options-display');
+        optionsDisplay.innerHTML = '';
+        
+        poll.options.forEach((option, index) => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'flex items-center justify-between p-3 bg-gray-800 rounded-lg';
+            optionDiv.innerHTML = `
+                <span class="text-white">${index + 1}. ${option}</span>
+                <span class="text-pump-purple font-medium">0 votes</span>
+            `;
+            optionsDisplay.appendChild(optionDiv);
+        });
+        
+        updatePollStats();
+    }
+
+    function startPollTimer(duration) {
+        let timeLeft = duration;
+        const timerElement = document.getElementById('poll-timer');
+        
+        pollTimer = setInterval(() => {
+            timeLeft--;
+            timerElement.textContent = `${timeLeft}s`;
+            
+            if (timeLeft <= 0) {
+                clearInterval(pollTimer);
+                endPoll();
+            }
+        }, 1000);
+    }
+
+    function endPoll() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+
+        fetch(`/poll/${streamerId}/end`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ pollId: currentPoll?.id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Poll ended successfully!', 'success');
+                document.getElementById('active-poll-display').classList.add('hidden');
+                currentPoll = null;
+            } else {
+                showNotification('Failed to end poll: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error ending poll:', error);
+            showNotification('Error ending poll', 'error');
+        });
+    }
+
+    function updatePollStats() {
+        if (!currentPoll) return;
+        
+        fetch(`/poll/${streamerId}/stats`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.poll) {
+                const totalVotes = data.poll.options.reduce((sum, option) => sum + (option.votes || 0), 0);
+                document.getElementById('total-votes').textContent = `Total votes: ${totalVotes}`;
+                
+                const optionsDisplay = document.getElementById('poll-options-display');
+                const optionElements = optionsDisplay.children;
+                
+                data.poll.options.forEach((option, index) => {
+                    if (optionElements[index]) {
+                        const voteSpan = optionElements[index].querySelector('.text-pump-purple');
+                        if (voteSpan) {
+                            voteSpan.textContent = `${option.votes || 0} votes`;
+                        }
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error updating poll stats:', error);
+        });
+    }
+
+    // Whitelist management functions
+    function loadWhitelist() {
+        fetch(`/poll/${streamerId}/whitelist`)
+            .then(response => response.json())
+            .then(data => {
+                renderWhitelist(data.whitelist || []);
+            })
+            .catch(error => {
+                console.error('Error loading whitelist:', error);
+                renderWhitelist([]);
+            });
+    }
+
+    function renderWhitelist(whitelist) {
+        const container = document.getElementById('whitelist-list');
+        
+        if (whitelist.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-gray-400 py-4">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    <p>No whitelisted addresses</p>
+                    <p class="text-xs mt-1">Add addresses to allow them to create polls</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = whitelist.map((address, index) => `
+            <div class="flex items-center justify-between p-3 bg-dark-bg rounded-lg border border-dark-border">
+                <div class="flex items-center space-x-3 flex-1 min-w-0">
+                    <div class="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span class="text-white font-mono text-sm truncate" title="${address}">${address}</span>
+                </div>
+                <button class="remove-whitelist-btn text-red-400 hover:text-red-300 transition-colors flex-shrink-0 ml-2" 
+                        data-address="${address}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+        
+        // Add event listeners for remove buttons
+        container.querySelectorAll('.remove-whitelist-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const address = this.getAttribute('data-address');
+                removeFromWhitelist(address);
+            });
+        });
+    }
+
+    function addToWhitelist() {
+        const address = document.getElementById('whitelist-address').value.trim();
+        console.log('🔍 addToWhitelist called with address:', address);
+        
+        if (!address) {
+            console.log('❌ No address provided');
+            showNotification('Please enter a Solana address', 'error');
+            return;
+        }
+
+        console.log('📤 Sending request to add address:', address);
+        fetch(`/poll/${streamerId}/whitelist/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ address })
+        })
+        .then(response => {
+            console.log('📥 Response received:', response.status, response.statusText);
+            return response.json();
+        })
+        .then(data => {
+            console.log('📊 Response data:', data);
+            if (data.success) {
+                showNotification('Address added to whitelist', 'success');
+                document.getElementById('whitelist-address').value = '';
+                loadWhitelist();
+            } else {
+                showNotification('Failed to add address: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error:', error);
+            showNotification('Failed to add address', 'error');
+        });
+    }
+
+    function removeFromWhitelist(address) {
+        if (!confirm(`Remove ${address} from whitelist?`)) return;
+
+        fetch(`/poll/${streamerId}/whitelist/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ address })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Address removed from whitelist', 'success');
+                loadWhitelist();
+            } else {
+                showNotification('Failed to remove address: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Failed to remove address', 'error');
+        });
+    }
+
+    // Load whitelist when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadWhitelist();
+        
+        // Add event listener for the add whitelist button
+        const addBtn = document.getElementById('add-whitelist-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', addToWhitelist);
+        }
+        
+        // Add event listener for Enter key in the input field
+        const addressInput = document.getElementById('whitelist-address');
+        if (addressInput) {
+            addressInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addToWhitelist();
+                }
+            });
+        }
+        
+        // Add event listeners for poll management
+        const createPollBtn = document.getElementById('create-poll-btn');
+        if (createPollBtn) {
+            createPollBtn.addEventListener('click', function() {
+                createPoll();
+            });
+        }
+
+        const addOptionBtn = document.getElementById('add-option');
+        if (addOptionBtn) {
+            addOptionBtn.addEventListener('click', addPollOption);
+        }
+
+        const endPollBtn = document.getElementById('end-poll-btn');
+        if (endPollBtn) {
+            endPollBtn.addEventListener('click', endPoll);
+        }
+
+        // Add event listeners for remove option buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-option')) {
+                removePollOption(e.target.closest('.remove-option'));
+            }
+        });
+
+        // Poll creation form is already hidden by default
+    });
+    </script>
+</body>
+</html>

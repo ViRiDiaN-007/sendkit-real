@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - SendKit Dashboard</title>
+    <link href="/css/style.css?v=<%= Math.random().toString(36).substr(2, 9) %>" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <meta name="description" content="SendKit Dashboard - Professional streaming tools for content creators">
+</head>
+<body class="bg-dark-bg text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-rocket text-black text-sm"></i>
+                        </div>
+                        <span class="text-xl font-bold text-green-400">SendKit</span>
+                    </a>
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <% if (typeof user !== 'undefined' && user) { %>
+                        <a href="/dashboard" class="text-gray-300 hover:text-white transition-colors duration-200">Dashboard</a>
+                        <div class="relative group">
+                            <button class="text-gray-300 hover:text-white transition-colors duration-200 flex items-center space-x-1">
+                                <span>Settings</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div class="absolute right-0 mt-2 w-48 bg-dark-card border border-dark-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                <a href="/tts/<%= user.streamer_id %>" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">TTS Settings</a>
+                                <a href="/poll/<%= user.streamer_id %>" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">Poll Settings</a>
+                                <a href="/automod/<%= user.streamer_id %>" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">Automod Settings</a>
+                            </div>
+                        </div>
+                    <% } else { %>
+                        <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors duration-200">Login</a>
+                        <a href="/auth/register" class="bg-green-500 hover:bg-green-600 text-black px-4 py-2 rounded-lg font-medium transition-colors duration-200">Sign Up</a>
+                    <% } %>
+                </div>
+
+                <!-- User Menu -->
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative group">
+                            <button class="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors duration-200">
+                                <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center">
+                                    <span class="text-black font-semibold text-sm"><%= user.username.charAt(0).toUpperCase() %></span>
+                                </div>
+                                <span><%= user.username %></span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div class="absolute right-0 mt-2 w-48 bg-dark-card border border-dark-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                <div class="px-4 py-2 border-b border-dark-border">
+                                    <p class="text-sm font-medium text-white"><%= user.username %></p>
+                                    <p class="text-xs text-gray-400"><%= user.email %></p>
+                                </div>
+                                <a href="/dashboard" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">Dashboard</a>
+                                <a href="/profile" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">Profile</a>
+                                <form method="POST" action="/auth/logout" class="block">
+                                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-dark-border">Logout</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button type="button" class="text-gray-300 hover:text-white focus:outline-none focus:text-white" onclick="toggleMobileMenu()">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile menu -->
+        <div id="mobile-menu" class="md:hidden hidden bg-dark-card border-t border-dark-border">
+            <div class="px-2 pt-2 pb-3 space-y-1">
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <a href="/dashboard" class="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">Dashboard</a>
+                    <a href="/tts/<%= user.streamer_id %>" class="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">TTS Settings</a>
+                    <a href="/poll/<%= user.streamer_id %>" class="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">Poll Settings</a>
+                    <a href="/automod/<%= user.streamer_id %>" class="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">Automod Settings</a>
+                    <form method="POST" action="/auth/logout" class="block">
+                        <button type="submit" class="w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">Logout</button>
+                    </form>
+                <% } else { %>
+                    <a href="/auth/login" class="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-border rounded-md">Login</a>
+                    <a href="/auth/register" class="block px-3 py-2 text-base font-medium text-black bg-gradient-to-r from-green-400 to-green-600 rounded-md">Sign Up</a>
+                <% } %>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="min-h-screen">
+        <!-- Flash Messages -->
+        <% if (typeof message !== 'undefined' && message) { %>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="notification success">
+                    <div class="p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-green-400"><%= message %></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <% } %>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="notification error">
+                    <div class="p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-red-400"><%= error %></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <% } %>
+
+        <%- typeof body !== 'undefined' ? body : '' %>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark-card border-t border-dark-border mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-rocket text-black text-sm"></i>
+                        </div>
+                        <span class="text-xl font-bold text-green-400">SendKit</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Professional streaming tools for content creators to manage TTS, polls, and automod features.</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Features</h3>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-colors">TTS Management</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Poll Overlays</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Automod Settings</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">OBS Integration</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Support</h3>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-colors">Documentation</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Discord</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-dark-border mt-8 pt-8 text-center text-sm text-gray-400">
+                <p>&copy; 2024 SendKit Dashboard. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Auto-hide notifications
+        setTimeout(() => {
+            const notifications = document.querySelectorAll('.notification');
+            notifications.forEach(notification => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => notification.remove(), 300);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

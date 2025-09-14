@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Browser Source</title>
+    <link href="/css/style.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        
+        .tts-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #0F0F23 0%, #1A1A2E 100%);
+            color: white;
+        }
+        
+        .tts-message {
+            background: rgba(139, 92, 246, 0.1);
+            border: 2px solid #8B5CF6;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin: 20px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+            backdrop-filter: blur(10px);
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        .tts-message.speaking {
+            animation: pulse 1s infinite;
+            border-color: #EC4899;
+            box-shadow: 0 10px 30px rgba(236, 72, 153, 0.4);
+        }
+        
+        .tts-text {
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin: 0;
+        }
+        
+        .tts-meta {
+            font-size: 14px;
+            color: #A78BFA;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+        
+        .no-tts {
+            text-align: center;
+            color: #6B7280;
+            font-size: 18px;
+        }
+        
+        .tts-queue {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(26, 26, 46, 0.8);
+            border: 1px solid #2D2D44;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            color: #A78BFA;
+        }
+        
+        .audio-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.8);
+            border: 1px solid #2D2D44;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #A78BFA;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .audio-status.enabled {
+            color: #10B981;
+            border-color: #10B981;
+        }
+        
+        .audio-status.disabled {
+            color: #EF4444;
+            border-color: #EF4444;
+        }
+        
+        .audio-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        
+        .audio-overlay.hidden {
+            display: none;
+        }
+        
+        .audio-overlay-content {
+            background: #1A1A2E;
+            border: 2px solid #8B5CF6;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            color: white;
+            max-width: 400px;
+        }
+        
+        .audio-overlay h3 {
+            margin: 0 0 15px 0;
+            color: #8B5CF6;
+        }
+        
+        .audio-overlay p {
+            margin: 0 0 20px 0;
+            color: #A78BFA;
+        }
+        
+        .audio-overlay button {
+            background: #8B5CF6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .audio-overlay button:hover {
+            background: #7C3AED;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+        
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tts-container">
+        <div id="audio-status" class="audio-status disabled">
+            <span id="audio-icon">🔇</span>
+            <span id="audio-text">Audio Disabled</span>
+        </div>
+        
+        <div id="tts-queue" class="tts-queue" style="display: none;">
+            Queue: <span id="queue-count">0</span>
+        </div>
+        
+        <div id="tts-content">
+            <div class="no-tts">
+                <div style="font-size: 48px; margin-bottom: 20px;">🎤</div>
+                <div>Waiting for TTS messages...</div>
+                <div id="audio-permission" style="margin-top: 20px; display: none;">
+                    <button id="enable-audio" style="background: #8B5CF6; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                        Click to Enable Audio
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Audio permission overlay -->
+    <div id="audio-overlay" class="audio-overlay">
+        <div class="audio-overlay-content">
+            <h3>🎤 Enable Audio for TTS</h3>
+            <p>Click anywhere to enable audio for text-to-speech messages.</p>
+            <button id="enable-audio-overlay">Enable Audio</button>
+        </div>
+    </div>
+
+    <script>
+        const streamerId = '<%= streamerId %>';
+        const socket = io();
+        
+        let currentMessage = null;
+        let messageTimeout = null;
+        let audioEnabled = false;
+        
+        // Auto-enable audio on page load
+        function autoEnableAudio() {
+            // Try to enable audio automatically
+            try {
+                // Method 1: Try Web Audio API first
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Resume audio context if suspended
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                // Create a silent buffer
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
+                
+                // Method 2: Try speech synthesis with empty string
+                const testUtterance = new SpeechSynthesisUtterance('');
+                testUtterance.volume = 0;
+                testUtterance.rate = 10; // Very fast to make it nearly instant
+                speechSynthesis.speak(testUtterance);
+                
+                // Method 3: Try with a very short, quiet sound
+                setTimeout(() => {
+                    const quietUtterance = new SpeechSynthesisUtterance(' ');
+                    quietUtterance.volume = 0.01;
+                    quietUtterance.rate = 20;
+                    speechSynthesis.speak(quietUtterance);
+                }, 100);
+                
+                audioEnabled = true;
+                updateAudioStatus(true);
+                console.log('Audio auto-enabled successfully');
+                return true;
+            } catch (error) {
+                console.log('Auto-enable failed, will require user interaction:', error);
+                return false;
+            }
+        }
+        
+        // More aggressive auto-enable that simulates user interaction
+        function forceEnableAudio() {
+            try {
+                // Create a hidden button and programmatically click it
+                const button = document.createElement('button');
+                button.style.display = 'none';
+                button.onclick = function() {
+                    enableAudio();
+                };
+                document.body.appendChild(button);
+                button.click();
+                document.body.removeChild(button);
+                return audioEnabled;
+            } catch (error) {
+                console.log('Force enable failed:', error);
+                return false;
+            }
+        }
+        
+        // Alternative method using a small invisible clickable area
+        function createInvisibleClickArea() {
+            const clickArea = document.createElement('div');
+            clickArea.style.position = 'fixed';
+            clickArea.style.top = '0';
+            clickArea.style.left = '0';
+            clickArea.style.width = '1px';
+            clickArea.style.height = '1px';
+            clickArea.style.opacity = '0';
+            clickArea.style.pointerEvents = 'auto';
+            clickArea.style.zIndex = '9999';
+            clickArea.onclick = function() {
+                enableAudio();
+                document.body.removeChild(clickArea);
+            };
+            document.body.appendChild(clickArea);
+            
+            // Auto-click after a short delay
+            setTimeout(() => {
+                if (clickArea.parentNode) {
+                    clickArea.click();
+                }
+            }, 100);
+        }
+        
+        // Update audio status indicator
+        function updateAudioStatus(enabled) {
+            const statusDiv = document.getElementById('audio-status');
+            const iconSpan = document.getElementById('audio-icon');
+            const textSpan = document.getElementById('audio-text');
+            
+            if (enabled) {
+                statusDiv.className = 'audio-status enabled';
+                iconSpan.textContent = '🔊';
+                textSpan.textContent = 'Audio Enabled';
+            } else {
+                statusDiv.className = 'audio-status disabled';
+                iconSpan.textContent = '🔇';
+                textSpan.textContent = 'Audio Disabled';
+            }
+        }
+        
+        // Check if audio is enabled
+        function checkAudioPermission() {
+            if (!audioEnabled) {
+                document.getElementById('audio-permission').style.display = 'block';
+                document.getElementById('audio-overlay').classList.remove('hidden');
+                updateAudioStatus(false);
+            }
+        }
+        
+        // Enable audio function
+        function enableAudio() {
+            try {
+                const testUtterance = new SpeechSynthesisUtterance('Audio enabled');
+                testUtterance.volume = 0.1;
+                speechSynthesis.speak(testUtterance);
+                
+                audioEnabled = true;
+                updateAudioStatus(true);
+                document.getElementById('audio-permission').style.display = 'none';
+                document.getElementById('audio-overlay').classList.add('hidden');
+                console.log('Audio enabled successfully');
+                return true;
+            } catch (error) {
+                console.error('Failed to enable audio:', error);
+                return false;
+            }
+        }
+        
+        // Enable audio on user interaction
+        document.getElementById('enable-audio').addEventListener('click', enableAudio);
+        
+        // Enable audio on overlay click
+        document.getElementById('enable-audio-overlay').addEventListener('click', enableAudio);
+        
+        // Enable audio on overlay background click
+        document.getElementById('audio-overlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                enableAudio();
+            }
+        });
+        
+        // Join streamer room
+        socket.emit('join-streamer', streamerId);
+        
+        // Try to auto-enable audio on load
+        if (!autoEnableAudio()) {
+            // Try force enable as fallback
+            if (!forceEnableAudio()) {
+                // Try invisible click area method
+                createInvisibleClickArea();
+                
+                // If all fail, show overlay after a short delay
+                setTimeout(() => {
+                    if (!audioEnabled) {
+                        checkAudioPermission();
+                    }
+                }, 2000);
+            }
+        }
+        
+        // Enable audio on any user interaction with the page
+        function enableAudioOnInteraction() {
+            if (!audioEnabled) {
+                enableAudio();
+            }
+        }
+        
+        // Listen for any user interaction to enable audio
+        ['click', 'touchstart', 'keydown', 'mousedown'].forEach(event => {
+            document.addEventListener(event, enableAudioOnInteraction, { once: true });
+        });
+        
+        // Handle TTS events
+        socket.on('tts-request', (data) => {
+            showTTSMessage(data);
+        });
+        
+        socket.on('tts-completed', (data) => {
+            hideTTSMessage();
+        });
+        
+        socket.on('tts-stats', (data) => {
+            updateQueueDisplay(data.queueLength);
+        });
+        
+        function showTTSMessage(data) {
+            const content = document.getElementById('tts-content');
+            const queueDisplay = document.getElementById('tts-queue');
+            const queueCount = document.getElementById('queue-count');
+            
+            // Clear any existing message
+            hideTTSMessage();
+            
+            // Create message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'tts-message speaking';
+            messageDiv.innerHTML = `
+                <div class="tts-text">${data.message}</div>
+                <div class="tts-meta">
+                    ${data.walletAddress ? `From: ${data.walletAddress.substring(0, 8)}...` : ''}
+                    ${data.amount ? ` • ${data.amount} SOL` : ''}
+                </div>
+            `;
+            
+            content.innerHTML = '';
+            content.appendChild(messageDiv);
+            
+            // Show queue if there are more messages
+            if (data.queueLength > 1) {
+                queueCount.textContent = data.queueLength - 1;
+                queueDisplay.style.display = 'block';
+            }
+            
+            // Play TTS audio using Web Speech API
+            playTTSAudio(data.message);
+            
+            // Set timeout to hide message after speaking duration
+            const speakingDuration = calculateSpeakingDuration(data.message);
+            messageTimeout = setTimeout(() => {
+                hideTTSMessage();
+            }, speakingDuration);
+            
+            currentMessage = messageDiv;
+        }
+        
+        function playTTSAudio(message) {
+            // Check if audio is enabled
+            if (!audioEnabled) {
+                console.log('Audio not enabled, showing permission button');
+                checkAudioPermission();
+                return;
+            }
+            
+            // Check if speech synthesis is supported
+            if ('speechSynthesis' in window) {
+                // Stop any current speech
+                speechSynthesis.cancel();
+                
+                // Create speech utterance
+                const utterance = new SpeechSynthesisUtterance(message);
+                
+                // Configure voice settings
+                utterance.rate = 1.0; // Speech rate
+                utterance.pitch = 1.0; // Voice pitch
+                utterance.volume = 1.0; // Volume level
+                utterance.lang = 'en-US'; // Set language
+                
+                // Wait for voices to load if not already loaded
+                if (speechSynthesis.getVoices().length === 0) {
+                    speechSynthesis.addEventListener('voiceschanged', () => {
+                        setVoiceAndSpeak(utterance);
+                    });
+                } else {
+                    setVoiceAndSpeak(utterance);
+                }
+                
+            } else {
+                console.warn('Speech synthesis not supported in this browser');
+            }
+        }
+        
+        function setVoiceAndSpeak(utterance) {
+            // Try to use a specific voice if available
+            const voices = speechSynthesis.getVoices();
+            console.log('Available voices:', voices.map(v => v.name));
+            
+            const preferredVoice = voices.find(voice => 
+                voice.name.includes('Google') || 
+                voice.name.includes('Microsoft') ||
+                voice.name.includes('English') ||
+                voice.lang.startsWith('en')
+            );
+            
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+                console.log('Using voice:', preferredVoice.name);
+            } else {
+                console.log('Using default voice');
+            }
+            
+            // Handle speech events
+            utterance.onstart = () => {
+                console.log('TTS started speaking:', utterance.text);
+            };
+            
+            utterance.onend = () => {
+                console.log('TTS finished speaking');
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('TTS error:', event.error);
+            };
+            
+            // Speak the message
+            console.log('Attempting to speak:', utterance.text);
+            speechSynthesis.speak(utterance);
+        }
+        
+        function hideTTSMessage() {
+            if (currentMessage) {
+                currentMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (currentMessage && currentMessage.parentNode) {
+                        currentMessage.parentNode.removeChild(currentMessage);
+                    }
+                    currentMessage = null;
+                }, 500);
+            }
+            
+            if (messageTimeout) {
+                clearTimeout(messageTimeout);
+                messageTimeout = null;
+            }
+            
+            // Show waiting message if no more messages
+            const content = document.getElementById('tts-content');
+            const queueDisplay = document.getElementById('tts-queue');
+            
+            if (!currentMessage) {
+                content.innerHTML = `
+                    <div class="no-tts">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🎤</div>
+                        <div>Waiting for TTS messages...</div>
+                    </div>
+                `;
+                queueDisplay.style.display = 'none';
+            }
+        }
+        
+        function updateQueueDisplay(queueLength) {
+            const queueDisplay = document.getElementById('tts-queue');
+            const queueCount = document.getElementById('queue-count');
+            
+            if (queueLength > 0) {
+                queueCount.textContent = queueLength;
+                queueDisplay.style.display = 'block';
+            } else {
+                queueDisplay.style.display = 'none';
+            }
+        }
+        
+        function calculateSpeakingDuration(message) {
+            // Estimate speaking duration based on message length
+            // Average speaking rate is about 150 words per minute
+            const words = message.split(' ').length;
+            const minutes = words / 150;
+            const seconds = Math.max(minutes * 60, 3); // Minimum 3 seconds
+            return Math.min(seconds * 1000, 10000); // Maximum 10 seconds
+        }
+        
+        // Request initial stats
+        socket.emit('request-tts-stats', streamerId);
+        
+        // Handle connection errors
+        socket.on('connect_error', (error) => {
+            console.error('Socket connection error:', error);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Socket disconnected');
+        });
+    </script>
+</body>
+</html>

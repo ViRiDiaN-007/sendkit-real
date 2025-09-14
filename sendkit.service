@@ -1,0 +1,21 @@
+[Unit]
+Description=SendKit Dashboard - PM2 process manager
+Documentation=https://pm2.keymetrics.io/
+After=network.target
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/sendkit-dashboard
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=PM2_HOME=/var/www/sendkit-dashboard/.pm2
+ExecStart=/usr/local/bin/pm2 start /var/www/sendkit-dashboard/ecosystem.config.js --env production
+ExecReload=/usr/local/bin/pm2 reload /var/www/sendkit-dashboard/ecosystem.config.js --env production
+ExecStop=/usr/local/bin/pm2 stop /var/www/sendkit-dashboard/ecosystem.config.js --env production
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="/css/style.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-dark-bg text-white min-h-screen relative overflow-hidden">
+    <!-- Subtle pulsing background lights -->
+    <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-green-400/30 rounded-full blur-3xl animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-48 h-48 bg-green-600/30 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+    <div class="absolute top-1/2 left-1/2 w-16 h-16 bg-green-500/25 rounded-full blur-2xl animate-pulse" style="animation-delay: 2s;"></div>
+    
+    <div class="min-h-screen relative z-10">
+        <!-- Navigation -->
+        <nav class="bg-dark-card border-b border-dark-border sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <a href="/dashboard" class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold text-sm">P</span>
+                            </div>
+                            <span class="text-xl font-bold text-green-400">SendKit</span>
+                        </a>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center">
+                                <span class="text-white font-semibold text-sm"><%= user.username.charAt(0).toUpperCase() %></span>
+                            </div>
+                            <span class="text-gray-300"><%= user.username %></span>
+                        </div>
+                        <form method="POST" action="/auth/logout">
+                            <button type="submit" class="text-gray-300 hover:text-green-400 transition-colors">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Breadcrumb -->
+            <nav class="mb-8">
+                <ol class="flex items-center space-x-2 text-sm text-gray-400">
+                    <li><a href="/dashboard" class="hover:text-green-400 transition-colors">Dashboard</a></li>
+                    <li class="text-gray-500">/</li>
+                    <li><a href="/dashboard/streamer/<%= streamer.streamer_id %>" class="hover:text-green-400 transition-colors"><%= streamer.username || 'Unnamed Streamer' %></a></li>
+                    <li class="text-gray-500">/</li>
+                    <li class="text-white">TTS Settings</li>
+                </ol>
+            </nav>
+
+            <!-- Page Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2">TTS Settings</h1>
+                <p class="text-gray-400">Configure text-to-speech settings for <span class="text-pump-pink font-semibold"><%= streamer.username || 'Unnamed Streamer' %></span></p>
+            </div>
+
+            <!-- TTS Status Card -->
+            <div class="card mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-white">TTS Service Status</h2>
+                    <div class="flex items-center space-x-2">
+                        <% if (ttsStats && ttsStats !== null) { %>
+                            <div class="status-indicator status-online px-3 py-1 rounded-full text-xs font-medium">
+                                Online
+                            </div>
+                        <% } else { %>
+                            <div class="status-indicator status-offline px-3 py-1 rounded-full text-xs font-medium">
+                                Offline
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+                <% if (ttsStats && ttsStats !== null) { %>
+                    <p class="text-gray-400 text-sm">TTS service is running and monitoring chat for donations.</p>
+                <% } else { %>
+                    <p class="text-gray-400 text-sm">The TTS service is currently offline. Please check your configuration.</p>
+                <% } %>
+            </div>
+
+            <!-- Settings Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Voice Settings -->
+                <div class="card">
+                    <h3 class="text-lg font-semibold text-white mb-4">Voice Settings</h3>
+                    <form id="tts-settings-form">
+                        <div class="space-y-6">
+                            <!-- Voice Selection -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-3">Voice</label>
+                                <select name="voice" class="w-full bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                                    <option value="en-US-Standard-A" <%= ttsSettings.voice === 'en-US-Standard-A' ? 'selected' : '' %>>English (US) - Standard A</option>
+                                    <option value="en-US-Standard-B" <%= ttsSettings.voice === 'en-US-Standard-B' ? 'selected' : '' %>>English (US) - Standard B</option>
+                                    <option value="en-US-Standard-C" <%= ttsSettings.voice === 'en-US-Standard-C' ? 'selected' : '' %>>English (US) - Standard C</option>
+                                    <option value="en-US-Standard-D" <%= ttsSettings.voice === 'en-US-Standard-D' ? 'selected' : '' %>>English (US) - Standard D</option>
+                                    <option value="en-US-Wavenet-A" <%= ttsSettings.voice === 'en-US-Wavenet-A' ? 'selected' : '' %>>English (US) - Wavenet A</option>
+                                    <option value="en-US-Wavenet-B" <%= ttsSettings.voice === 'en-US-Wavenet-B' ? 'selected' : '' %>>English (US) - Wavenet B</option>
+                                    <option value="en-US-Wavenet-C" <%= ttsSettings.voice === 'en-US-Wavenet-C' ? 'selected' : '' %>>English (US) - Wavenet C</option>
+                                    <option value="en-US-Wavenet-D" <%= ttsSettings.voice === 'en-US-Wavenet-D' ? 'selected' : '' %>>English (US) - Wavenet D</option>
+                                </select>
+                            </div>
+
+                            <!-- Rate -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-3">Speech Rate: <span id="rate-value"><%= ttsSettings.rate %></span></label>
+                                <input type="range" name="rate" min="0.25" max="4.0" step="0.25" value="<%= ttsSettings.rate %>" 
+                                       class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer slider">
+                            </div>
+
+                            <!-- Volume -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-3">Volume: <span id="volume-value"><%= ttsSettings.volume %></span></label>
+                                <input type="range" name="volume" min="0.0" max="1.0" step="0.1" value="<%= ttsSettings.volume %>" 
+                                       class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer slider">
+                            </div>
+
+                            <!-- Pitch -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-3">Pitch: <span id="pitch-value"><%= ttsSettings.pitch %></span></label>
+                                <input type="range" name="pitch" min="0.25" max="4.0" step="0.25" value="<%= ttsSettings.pitch %>" 
+                                       class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer slider">
+                            </div>
+
+                            <!-- Enabled Toggle -->
+                            <div class="flex items-center justify-between mt-2">
+                                <label class="text-sm font-medium text-gray-300">Enable TTS</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="enabled" class="sr-only peer" <%= ttsSettings.enabled ? 'checked' : '' %>>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                </label>
+                            </div>
+
+                            <!-- Auto TTS Toggle -->
+                            <div class="flex items-center justify-between mt-2">
+                                <label class="text-sm font-medium text-gray-300">Auto TTS</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="auto_tts_enabled" class="sr-only peer" <%= ttsSettings.auto_tts_enabled ? 'checked' : '' %>>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                </label>
+                            </div>
+
+                            <!-- Donation Gate Toggle -->
+                            <div class="flex items-center justify-between mt-2">
+                                <label class="text-sm font-medium text-gray-300">Donation Gate</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="donation_gate_enabled" class="sr-only peer" <%= ttsSettings.donation_gate_enabled ? 'checked' : '' %>>
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Donation Settings -->
+                <div class="card">
+                    <h3 class="text-lg font-semibold text-white mb-4">Donation Settings</h3>
+                    <div class="space-y-6">
+                        <!-- Donation Wallet Address -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-3">Donation Wallet Address</label>
+                            <div class="flex space-x-2">
+                                <input type="text" name="wallet_address" value="<%= streamer.wallet_address %>" 
+                                       class="flex-1 bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono text-sm"
+                                       placeholder="Enter Solana wallet address...">
+                                <button type="button" id="update-wallet-btn" class="bg-green-500 hover:from-green-500 hover:to-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                                    Update
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">This wallet will be monitored for incoming SOL donations</p>
+                        </div>
+
+                        <!-- Minimum Donation -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-3">Minimum Donation (SOL)</label>
+                            <input type="number" name="min_donation" step="0.001" min="0" value="<%= ttsSettings.min_donation %>" 
+                                   class="w-full bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        </div>
+
+                        <!-- Cooldown -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-3">Cooldown (seconds)</label>
+                            <input type="number" name="cooldown_seconds" min="0" max="3600" value="<%= ttsSettings.cooldown_seconds %>" 
+                                   class="w-full bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        </div>
+
+                        <!-- Max Message Length -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-3">Max Message Length</label>
+                            <input type="number" name="max_message_length" min="10" max="500" value="<%= ttsSettings.max_message_length %>" 
+                                   class="w-full bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browser Source -->
+            <div class="card mb-8">
+                <h3 class="text-lg font-semibold text-white mb-4">OBS Browser Source</h3>
+                <div class="space-y-6">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-300 mb-4">TTS Browser Source URL</label>
+                            <div class="flex">
+                                <input type="text" id="tts-url" value="<%= browserSourceUrl %>" readonly 
+                                       class="flex-1 bg-dark-card border border-dark-border text-white px-3 py-2 rounded-l-lg focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                                <button id="copy-tts-url" class="bg-green-500 hover:from-green-500 hover:to-green-700 text-white px-4 py-2 rounded-r-lg transition-colors">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400">Add this URL as a Browser Source in OBS to display TTS messages on your stream.</p>
+                </div>
+            </div>
+
+            <!-- Recent Messages -->
+            <div class="card mb-8">
+                <h3 class="text-lg font-semibold text-white mb-4">Recent TTS Messages</h3>
+                <div id="recent-messages" class="space-y-2">
+                    <% if (recentMessages && recentMessages.length > 0) { %>
+                        <% recentMessages.forEach(message => { %>
+                            <div class="bg-dark-card border border-dark-border rounded-lg p-3">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="text-white text-sm"><%= message.text %></p>
+                                        <p class="text-gray-400 text-xs mt-1">From: <%= message.sender %> • <%= new Date(message.timestamp).toLocaleString() %></p>
+                                    </div>
+                                    <div class="text-gray-500 text-xs">
+                                        <%= message.donation ? `${message.donation} SOL` : 'Free' %>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <p class="text-gray-400 text-sm">No recent TTS messages.</p>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="card text-center">
+                    <div class="text-2xl font-bold text-pump-purple mb-2"><%= ttsStats.queueLength || 0 %></div>
+                    <div class="text-sm text-gray-400">Queue Length</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-2xl font-bold text-pump-green mb-2"><%= ttsStats.processedToday || 0 %></div>
+                    <div class="text-sm text-gray-400">Processed Today</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-2xl font-bold text-pump-orange mb-2"><%= ttsStats.errors || 0 %></div>
+                    <div class="text-sm text-gray-400">Errors</div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-between items-center mt-6">
+                <a href="/dashboard/streamer/<%= streamer.streamer_id %>" 
+                   class="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg transition-colors">
+                    Back to Streamer
+                </a>
+                <div class="flex space-x-4">
+                    <button id="test-tts" class="bg-pump-blue hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        Test TTS
+                    </button>
+                    <button id="save-settings" class="bg-green-500 hover:from-green-500 hover:to-green-700 text-white px-6 py-2 rounded-lg transition-colors">
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const streamerId = '<%= streamer.streamer_id %>';
+        
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update slider values
+            document.querySelectorAll('input[type="range"]').forEach(slider => {
+                const valueSpan = document.getElementById(slider.name + '-value');
+                if (valueSpan) {
+                    slider.addEventListener('input', function() {
+                        valueSpan.textContent = this.value;
+                    });
+                }
+            });
+        });
+
+        // Copy URL functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const copyButton = document.getElementById('copy-tts-url');
+            if (copyButton) {
+                copyButton.addEventListener('click', function() {
+                    const urlInput = document.getElementById('tts-url');
+                    if (urlInput) {
+                        urlInput.select();
+                        urlInput.setSelectionRange(0, 99999);
+                        
+                        if (navigator.clipboard && window.isSecureContext) {
+                            navigator.clipboard.writeText(urlInput.value).then(() => {
+                                showNotification('URL copied to clipboard!', 'success');
+                            }).catch(() => {
+                                fallbackCopyTextToClipboard(urlInput.value);
+                            });
+                        } else {
+                            fallbackCopyTextToClipboard(urlInput.value);
+                        }
+                    }
+                });
+            }
+        });
+
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showNotification('URL copied to clipboard!', 'success');
+            } catch (err) {
+                showNotification('Failed to copy URL', 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        // Save settings
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, looking for save button...');
+            const saveButton = document.getElementById('save-settings');
+            console.log('Save button found:', saveButton);
+            if (saveButton) {
+                console.log('Adding click listener to save button');
+                saveButton.addEventListener('click', function() {
+                    console.log('Save button clicked!');
+            const form = document.getElementById('tts-settings-form');
+            if (!form) {
+                console.error('TTS settings form not found');
+                showNotification('Error: Form not found', 'error');
+                return;
+            }
+            
+            const formData = new FormData(form);
+            const settings = {};
+            
+            for (let [key, value] of formData.entries()) {
+                if (key === 'enabled' || key === 'auto_tts_enabled' || key === 'donation_gate_enabled') {
+                    settings[key] = true;
+                } else if (key === 'rate' || key === 'volume' || key === 'pitch' || key === 'min_donation' || key === 'cooldown_seconds' || key === 'max_message_length') {
+                    settings[key] = parseFloat(value);
+                } else {
+                    settings[key] = value;
+                }
+            }
+            
+            // Add checkbox values with null checks
+            const enabledCheckbox = form.querySelector('input[name="enabled"]');
+            const autoTtsCheckbox = form.querySelector('input[name="auto_tts_enabled"]');
+            const donationGateCheckbox = form.querySelector('input[name="donation_gate_enabled"]');
+            
+            settings.enabled = enabledCheckbox ? enabledCheckbox.checked : false;
+            settings.auto_tts_enabled = autoTtsCheckbox ? autoTtsCheckbox.checked : false;
+            settings.donation_gate_enabled = donationGateCheckbox ? donationGateCheckbox.checked : false;
+            
+            console.log('Checkbox states:', {
+                enabled: enabledCheckbox ? enabledCheckbox.checked : 'not found',
+                auto_tts_enabled: autoTtsCheckbox ? autoTtsCheckbox.checked : 'not found',
+                donation_gate_enabled: donationGateCheckbox ? donationGateCheckbox.checked : 'not found'
+            });
+            console.log('Sending settings:', settings);
+            console.log('Fetching URL:', `/tts/${streamerId}/update`);
+            fetch(`/tts/${streamerId}/update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Settings saved successfully!', 'success');
+                } else {
+                    showNotification('Failed to save settings: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Save settings error:', error);
+                showNotification('Failed to save settings. Please try again.', 'error');
+            });
+                });
+            }
+        });
+
+        // Test TTS
+        document.addEventListener('DOMContentLoaded', function() {
+            const testButton = document.getElementById('test-tts');
+            if (testButton) {
+                testButton.addEventListener('click', function() {
+                    showTestTTSModal();
+                });
+            }
+        });
+
+        // Wallet address update functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const updateWalletBtn = document.getElementById('update-wallet-btn');
+            if (updateWalletBtn) {
+                updateWalletBtn.addEventListener('click', function() {
+                    updateWalletAddress();
+                });
+            }
+        });
+
+        // Debug: Log TTS settings values
+        console.log('TTS Settings in view:', {
+            enabled: <%= ttsSettings.enabled %>,
+            auto_tts_enabled: <%= ttsSettings.auto_tts_enabled %>,
+            donation_gate_enabled: <%= ttsSettings.donation_gate_enabled %>
+        });
+
+        // Real-time TTS message updates
+        document.addEventListener('DOMContentLoaded', function() {
+            // Connect to Socket.IO
+            const socket = io();
+            
+            // Join the streamer room for real-time updates
+            socket.emit('join-streamer', '<%= streamer.streamer_id %>');
+            console.log('Joined streamer room:', '<%= streamer.streamer_id %>');
+            
+            // Listen for new TTS messages
+            socket.on('tts-message', function(data) {
+                console.log('Received TTS message:', data);
+                addTTSMessageToUI(data.message);
+            });
+            
+            // Debug: Listen for any socket events
+            socket.on('connect', function() {
+                console.log('Socket connected');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Socket disconnected');
+            });
+        });
+
+        function addTTSMessageToUI(message) {
+            const recentMessagesContainer = document.getElementById('recent-messages');
+            if (!recentMessagesContainer) return;
+            
+            // Remove "No recent TTS messages" text if it exists
+            const noMessagesText = recentMessagesContainer.querySelector('p.text-gray-400');
+            if (noMessagesText) {
+                noMessagesText.remove();
+            }
+            
+            // Create new message element
+            const messageElement = document.createElement('div');
+            messageElement.className = 'bg-dark-card border border-dark-border rounded-lg p-3';
+            
+            const donationText = message.amount > 0 ? `${message.amount} SOL` : 'Free';
+            const timestamp = new Date(message.timestamp).toLocaleString();
+            
+            messageElement.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-white text-sm">${message.text}</p>
+                        <p class="text-gray-400 text-xs mt-1">From: ${message.sender} • ${timestamp}</p>
+                    </div>
+                    <div class="text-gray-500 text-xs">
+                        ${donationText}
+                    </div>
+                </div>
+            `;
+            
+            // Add to top of the list
+            recentMessagesContainer.insertBefore(messageElement, recentMessagesContainer.firstChild);
+            
+            // Keep only the last 20 messages visible
+            const messages = recentMessagesContainer.querySelectorAll('.bg-dark-card');
+            if (messages.length > 20) {
+                messages[messages.length - 1].remove();
+            }
+        }
+
+        function updateWalletAddress() {
+            const walletInput = document.querySelector('input[name="wallet_address"]');
+            const newWalletAddress = walletInput.value.trim();
+            
+            if (!newWalletAddress) {
+                showNotification('Please enter a wallet address', 'error');
+                return;
+            }
+            
+            // Basic validation for Solana wallet address (44 characters, base58)
+            if (newWalletAddress.length < 32 || newWalletAddress.length > 44) {
+                showNotification('Please enter a valid Solana wallet address', 'error');
+                return;
+            }
+            
+            const updateBtn = document.getElementById('update-wallet-btn');
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Updating...';
+            
+            fetch(`/api/streamer/<%= streamer.streamer_id %>/update-wallet`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    wallet_address: newWalletAddress
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Wallet address updated successfully!', 'success');
+                    // The page will need to be refreshed to show the new wallet in the TTS service
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showNotification('Failed to update wallet address: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating wallet address:', error);
+                showNotification('Error updating wallet address', 'error');
+            })
+            .finally(() => {
+                updateBtn.disabled = false;
+                updateBtn.textContent = 'Update';
+            });
+        }
+
+        function showTestTTSModal() {
+            // Create modal overlay
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modalOverlay.id = 'test-tts-modal';
+            
+            // Create modal content
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-dark-card border border-dark-border rounded-lg p-6 w-full max-w-md mx-4';
+            
+            modalContent.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-white">Test TTS Message</h3>
+                    <button id="close-test-modal" class="text-gray-400 hover:text-green-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Enter test message:</label>
+                    <textarea id="test-message-input" 
+                              class="w-full bg-dark-card border border-dark-border text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent resize-none" 
+                              rows="3" 
+                              placeholder="Type your test message here..."></textarea>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-test" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button id="send-test" class="bg-green-500 hover:from-green-500 hover:to-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        Send Test
+                    </button>
+                </div>
+            `;
+            
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+            
+            // Focus on input
+            const input = document.getElementById('test-message-input');
+            input.focus();
+            
+            // Event listeners
+            document.getElementById('close-test-modal').addEventListener('click', closeTestModal);
+            document.getElementById('cancel-test').addEventListener('click', closeTestModal);
+            document.getElementById('send-test').addEventListener('click', sendTestMessage);
+            
+            // Close on overlay click
+            modalOverlay.addEventListener('click', function(e) {
+                if (e.target === modalOverlay) {
+                    closeTestModal();
+                }
+            });
+            
+            // Close on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeTestModal();
+                }
+            });
+            
+            function closeTestModal() {
+                document.body.removeChild(modalOverlay);
+            }
+            
+            function sendTestMessage() {
+                const message = input.value.trim();
+                if (!message) {
+                    showNotification('Please enter a test message', 'error');
+                    return;
+                }
+                
+                // Disable button during request
+                const sendBtn = document.getElementById('send-test');
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Sending...';
+                
+                fetch(`/tts/${streamerId}/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Test message sent to TTS!', 'success');
+                        closeTestModal();
+                    } else {
+                        showNotification('Failed to send test message: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Test TTS error:', error);
+                    showNotification('Failed to send test message. Please try again.', 'error');
+                })
+                .finally(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send Test';
+                });
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-red-900/20 border-red-500 text-red-400';
+            notification.className = `fixed top-4 right-4 z-50 ${bgColor} border px-4 py-2 rounded-lg text-sm max-w-md`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

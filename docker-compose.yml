@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pump-dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - BROWSER_SOURCE_BASE_URL=https://yourdomain.com
+      - CORS_ORIGIN=https://yourdomain.com
+      - SESSION_SECRET=your-super-secure-production-secret-key-here
+      - DB_PATH=/var/lib/pump-dashboard/streamers.db
+    volumes:
+      - pump-db:/var/lib/pump-dashboard
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pump-db:

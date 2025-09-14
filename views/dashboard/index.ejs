@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body class="bg-dark-bg text-white min-h-screen relative overflow-hidden">
+    <!-- Subtle pulsing background lights -->
+    <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-green-400/30 rounded-full blur-3xl animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-48 h-48 bg-green-600/30 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+    <div class="absolute top-1/2 left-1/2 w-16 h-16 bg-green-500/25 rounded-full blur-2xl animate-pulse" style="animation-delay: 2s;"></div>
+    
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-rocket text-black text-sm"></i>
+                        </div>
+                        <span class="text-xl font-bold text-green-400">SendKit</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center">
+                            <span class="text-black font-semibold text-sm"><%= user.username.charAt(0).toUpperCase() %></span>
+                        </div>
+                        <span class="text-gray-300"><%= user.username %></span>
+                    </div>
+                    <form method="POST" action="/auth/logout">
+                        <button type="submit" class="text-gray-300 hover:text-white transition-colors">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Welcome Message -->
+    <% if (welcome) { %>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="notification success">
+                <div class="p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-green-400">Welcome to SendKit! Your account has been created successfully.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <% } %>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Dashboard</h1>
+            <p class="text-gray-400">Manage your streaming tools and settings</p>
+        </div>
+
+        <!-- Service Status -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white mb-1">TTS Service</h3>
+                        <p class="text-sm text-gray-400">Text-to-Speech</p>
+                    </div>
+                    <div class="status-indicator <%= services.tts ? 'status-online' : 'status-offline' %>">
+                        <%= services.tts ? 'Online' : 'Offline' %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white mb-1">Poll Service</h3>
+                        <p class="text-sm text-gray-400">Interactive Polls</p>
+                    </div>
+                    <div class="status-indicator <%= services.poll ? 'status-online' : 'status-offline' %>">
+                        <%= services.poll ? 'Online' : 'Offline' %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white mb-1">Automod Service</h3>
+                        <p class="text-sm text-gray-400">Chat Moderation</p>
+                    </div>
+                    <div class="status-indicator <%= services.automod ? 'status-online' : 'status-offline' %>">
+                        <%= services.automod ? 'Online' : 'Offline' %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Streamers -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-white">Your Streamers</h2>
+                <a href="/dashboard/add-streamer" class="bg-gradient-to-r from-green-400 to-green-600 text-black font-semibold px-4 py-2 rounded-lg hover:from-green-500 hover:to-green-700 transition-all duration-300 transform hover:scale-105 inline-flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Add Streamer
+                </a>
+            </div>
+
+            <% if (streamers && streamers.length > 0) { %>
+                <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <% streamers.forEach(streamer => { %>
+                        <div class="card hover:shadow-glow-green transition-all duration-300">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white">
+                                        <span class="username-display cursor-pointer hover:text-pump-pink transition-colors" 
+                                              data-streamer-id="<%= streamer.streamer_id %>" 
+                                              data-current-username="<%= streamer.username || '' %>"
+                                              title="Click to edit username">
+                                            <%= streamer.username || 'Unnamed Streamer' %>
+                                        </span>
+                                    </h3>
+                                    <p class="text-sm text-gray-400"><%= streamer.streamer_id %></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button class="toggle-status-btn <%= streamer.is_active ? 'text-green-400 hover:text-green-300' : 'text-gray-400 hover:text-gray-300' %> p-1 rounded transition-colors" 
+                                            data-streamer-id="<%= streamer.streamer_id %>" 
+                                            data-current-status="<%= streamer.is_active %>"
+                                            title="<%= streamer.is_active ? 'Deactivate' : 'Activate' %> Streamer">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <% if (streamer.is_active) { %>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <% } else { %>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <% } %>
+                                        </svg>
+                                    </button>
+                                    <div class="status-indicator <%= streamer.is_active ? 'status-online' : 'status-offline' %>">
+                                        <%= streamer.is_active ? 'Active' : 'Inactive' %>
+                                    </div>
+                                    <button class="delete-streamer-btn text-red-400 hover:text-red-300 p-1 rounded transition-colors" 
+                                            data-streamer-id="<%= streamer.streamer_id %>" 
+                                            data-streamer-name="<%= streamer.username || 'Unnamed Streamer' %>"
+                                            title="Delete Streamer">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3 mb-6">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-400">Wallet:</span>
+                                    <span class="text-white font-mono text-xs"><%= streamer.wallet_address ? streamer.wallet_address.substring(0, 8) + '...' : 'Not set' %></span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-400">Token:</span>
+                                    <span class="text-white font-mono text-xs"><%= streamer.token_address ? streamer.token_address.substring(0, 8) + '...' : 'Not set' %></span>
+                                </div>
+                            </div>
+
+                            <!-- Quick Stats -->
+                            <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+                                <div>
+                                    <div class="text-lg font-bold text-white"><%= streamer.ttsStats.queueLength || 0 %></div>
+                                    <div class="text-xs text-gray-400">TTS Queue</div>
+                                </div>
+                                <div>
+                                    <div class="text-lg font-bold text-white"><%= streamer.pollStats.activePolls || 0 %></div>
+                                    <div class="text-xs text-gray-400">Active Polls</div>
+                                </div>
+                                <div>
+                                    <div class="text-lg font-bold text-white"><%= streamer.automodStats.totalActions || 0 %></div>
+                                    <div class="text-xs text-gray-400">Mod Actions</div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="space-y-2">
+                                <a href="/dashboard/streamer/<%= streamer.streamer_id %>" class="w-full btn-secondary text-center block">
+                                    Manage Settings
+                                </a>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <a href="/tts/<%= streamer.streamer_id %>" class="btn-secondary text-center block text-sm py-2">
+                                        TTS
+                                    </a>
+                                    <a href="/poll/<%= streamer.streamer_id %>" class="btn-secondary text-center block text-sm py-2">
+                                        Polls
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Browser Source URLs -->
+                            <div class="mt-4 pt-4 border-t border-dark-border">
+                                <p class="text-xs text-gray-400 mb-2">OBS Browser Sources:</p>
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-gray-300">TTS:</span>
+                                        <button class="copy-btn text-xs text-green-400 hover:text-green-600" data-url="<%= streamer.browserSourceUrls.tts %>">
+                                            Copy URL
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-gray-300">Poll:</span>
+                                        <button class="copy-btn text-xs text-green-400 hover:text-green-600" data-url="<%= streamer.browserSourceUrls.poll %>">
+                                            Copy URL
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="card text-center py-12">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">No Streamers Yet</h3>
+                    <p class="text-gray-400 mb-6">Add your first streamer to start using TTS, polls, and automod features.</p>
+                    <a href="/dashboard/add-streamer" class="bg-gradient-to-r from-green-400 to-green-600 text-black font-semibold px-6 py-3 rounded-lg hover:from-green-500 hover:to-green-700 transition-all duration-300 transform hover:scale-105 inline-block">
+                        Add Your First Streamer
+                    </a>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <a href="/dashboard/add-streamer" class="flex items-center p-4 bg-dark-bg border border-dark-border rounded-lg hover:border-green-400 transition-colors">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-white font-medium">Add Streamer</div>
+                        <div class="text-xs text-gray-400">Connect new wallet</div>
+                    </div>
+                </a>
+
+                <a href="#" class="flex items-center p-4 bg-dark-bg border border-dark-border rounded-lg hover:border-green-400 transition-colors">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-white font-medium">Create Poll</div>
+                        <div class="text-xs text-gray-400">Engage viewers</div>
+                    </div>
+                </a>
+
+                <a href="#" class="flex items-center p-4 bg-dark-bg border border-dark-border rounded-lg hover:border-green-400 transition-colors">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-white font-medium">Setup Automod</div>
+                        <div class="text-xs text-gray-400">Moderate chat</div>
+                    </div>
+                </a>
+
+                <a href="#" class="flex items-center p-4 bg-dark-bg border border-dark-border rounded-lg hover:border-green-400 transition-colors">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-white font-medium">Settings</div>
+                        <div class="text-xs text-gray-400">Configure tools</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add event listeners when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const copyButtons = document.querySelectorAll('.copy-btn');
+            copyButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const url = this.getAttribute('data-url');
+                    copyToClipboard(url);
+                });
+            });
+
+            // Add delete streamer functionality
+            const deleteButtons = document.querySelectorAll('.delete-streamer-btn');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const streamerId = this.getAttribute('data-streamer-id');
+                    const streamerName = this.getAttribute('data-streamer-name');
+                    deleteStreamer(streamerId, streamerName);
+                });
+            });
+
+            // Add toggle status functionality
+            const toggleButtons = document.querySelectorAll('.toggle-status-btn');
+            toggleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const streamerId = this.getAttribute('data-streamer-id');
+                    const currentStatus = this.getAttribute('data-current-status') === 'true';
+                    toggleStreamerStatus(streamerId, currentStatus);
+                });
+            });
+
+            // Add username editing functionality
+            const usernameDisplays = document.querySelectorAll('.username-display');
+            usernameDisplays.forEach(display => {
+                display.addEventListener('click', function() {
+                    const streamerId = this.getAttribute('data-streamer-id');
+                    const currentUsername = this.getAttribute('data-current-username');
+                    editUsername(streamerId, currentUsername, this);
+                });
+            });
+        });
+
+        function copyToClipboard(text) {
+            console.log('Copy function called with:', text);
+            
+            // Try modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                console.log('Using modern clipboard API');
+                navigator.clipboard.writeText(text).then(function() {
+                    console.log('Clipboard API success');
+                    showNotification('URL copied to clipboard!', 'success');
+                }).catch(function(err) {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopyTextToClipboard(text);
+                });
+            } else {
+                console.log('Using fallback method');
+                // Fallback for older browsers or non-secure contexts
+                fallbackCopyTextToClipboard(text);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            console.log('Using fallback copy method');
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            
+            // Avoid scrolling to bottom
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                console.log('execCommand result:', successful);
+                if (successful) {
+                    showNotification('URL copied to clipboard!', 'success');
+                } else {
+                    showNotification('Failed to copy. Please copy manually: ' + text, 'error');
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                showNotification('Failed to copy. Please copy manually: ' + text, 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function deleteStreamer(streamerId, streamerName) {
+            showDeleteModal(streamerId, streamerName);
+        }
+
+        function showDeleteModal(streamerId, streamerName) {
+            // Create modal overlay
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modalOverlay.id = 'delete-modal-overlay';
+            
+            // Create modal content
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-dark-card border border-dark-border rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl';
+            modalContent.innerHTML = `
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-red-500 bg-opacity-20 rounded-full flex items-center justify-center mr-4">
+                        <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Delete Streamer</h3>
+                        <p class="text-sm text-gray-400">This action cannot be undone</p>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <p class="text-white mb-3">Are you sure you want to delete <span class="font-semibold text-pump-pink">"${streamerName}"</span>?</p>
+                    
+                    <div class="bg-red-900 bg-opacity-20 border border-red-500 border-opacity-30 rounded-lg p-4">
+                        <p class="text-red-300 text-sm font-medium mb-2">This will:</p>
+                        <ul class="text-red-200 text-sm space-y-1">
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Stop all poll bots for this streamer
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Remove all settings and data
+                            </li>
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                This action cannot be undone
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button id="cancel-delete" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button id="confirm-delete" class="flex-1 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors">
+                        Delete Streamer
+                    </button>
+                </div>
+            `;
+            
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+            
+            // Add event listeners
+            document.getElementById('cancel-delete').addEventListener('click', () => {
+                closeDeleteModal();
+            });
+            
+            document.getElementById('confirm-delete').addEventListener('click', () => {
+                closeDeleteModal();
+                performDelete(streamerId);
+            });
+            
+            // Close on overlay click
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) {
+                    closeDeleteModal();
+                }
+            });
+            
+            // Close on Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    closeDeleteModal();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('delete-modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function performDelete(streamerId) {
+            fetch(`/dashboard/streamer/${streamerId}/delete`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Streamer deleted successfully!', 'success');
+                    // Remove the streamer card from the DOM
+                    const streamerCard = document.querySelector(`[data-streamer-id="${streamerId}"]`).closest('.card');
+                    if (streamerCard) {
+                        streamerCard.remove();
+                    }
+                    // Check if no streamers left and show empty state
+                    const remainingCards = document.querySelectorAll('.card.shadow-glow-green');
+                    if (remainingCards.length === 0) {
+                        location.reload(); // Reload to show empty state
+                    }
+                } else {
+                    showNotification('Failed to delete streamer: ' + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Delete streamer error:', error);
+                showNotification('Failed to delete streamer. Please try again.', 'error');
+            });
+        }
+
+        function toggleStreamerStatus(streamerId, currentStatus) {
+            const newStatus = !currentStatus;
+            const action = newStatus ? 'activate' : 'deactivate';
+            
+            fetch(`/dashboard/streamer/${streamerId}/toggle-status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ is_active: newStatus })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Streamer ${action}d successfully!`, 'success');
+                    // Update the UI
+                    updateStreamerStatus(streamerId, newStatus);
+                } else {
+                    showNotification(`Failed to ${action} streamer: ` + (data.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Toggle status error:', error);
+                showNotification(`Failed to ${action} streamer. Please try again.`, 'error');
+            });
+        }
+
+        function updateStreamerStatus(streamerId, isActive) {
+            const streamerCard = document.querySelector(`[data-streamer-id="${streamerId}"]`).closest('.card');
+            if (!streamerCard) return;
+
+            // Update status indicator
+            const statusIndicator = streamerCard.querySelector('.status-indicator');
+            if (statusIndicator) {
+                statusIndicator.className = `status-indicator ${isActive ? 'status-online' : 'status-offline'}`;
+                statusIndicator.textContent = isActive ? 'Active' : 'Inactive';
+            }
+
+            // Update toggle button
+            const toggleBtn = streamerCard.querySelector('.toggle-status-btn');
+            if (toggleBtn) {
+                toggleBtn.className = `toggle-status-btn ${isActive ? 'text-green-400 hover:text-green-300' : 'text-gray-400 hover:text-gray-300'} p-1 rounded transition-colors`;
+                toggleBtn.setAttribute('data-current-status', isActive);
+                toggleBtn.setAttribute('title', `${isActive ? 'Deactivate' : 'Activate'} Streamer`);
+                
+                // Update icon
+                const icon = toggleBtn.querySelector('svg path');
+                if (icon) {
+                    if (isActive) {
+                        icon.setAttribute('d', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z');
+                    } else {
+                        icon.setAttribute('d', 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z');
+                    }
+                }
+            }
+        }
+
+        function editUsername(streamerId, currentUsername, element) {
+            // Create input field
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentUsername;
+            input.className = 'bg-dark-card border border-dark-border text-white px-2 py-1 rounded text-lg font-semibold w-full';
+            input.placeholder = 'Enter username';
+            
+            // Replace the span with input
+            element.parentNode.replaceChild(input, element);
+            input.focus();
+            input.select();
+            
+            // Handle save on Enter or blur
+            const saveUsername = () => {
+                const newUsername = input.value.trim();
+                if (newUsername !== currentUsername) {
+                    updateUsername(streamerId, newUsername, input);
+                } else {
+                    // Cancel edit
+                    cancelUsernameEdit(currentUsername, input);
+                }
+            };
+            
+            const cancelUsernameEdit = (originalUsername, inputElement) => {
+                const span = document.createElement('span');
+                span.className = 'username-display cursor-pointer hover:text-pump-pink transition-colors';
+                span.setAttribute('data-streamer-id', streamerId);
+                span.setAttribute('data-current-username', originalUsername);
+                span.setAttribute('title', 'Click to edit username');
+                span.textContent = originalUsername || 'Unnamed Streamer';
+                
+                inputElement.parentNode.replaceChild(span, inputElement);
+                
+                // Re-add event listener
+                span.addEventListener('click', function() {
+                    editUsername(streamerId, originalUsername, this);
+                });
+            };
+            
+            input.addEventListener('blur', saveUsername);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    saveUsername();
+                } else if (e.key === 'Escape') {
+                    cancelUsernameEdit(currentUsername, input);
+                }
+            });
+        }
+
+        function updateUsername(streamerId, newUsername, inputElement) {
+            fetch(`/dashboard/streamer/${streamerId}/update-username`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username: newUsername })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Username updated successfully!', 'success');
+                    // Update the display
+                    const span = document.createElement('span');
+                    span.className = 'username-display cursor-pointer hover:text-pump-pink transition-colors';
+                    span.setAttribute('data-streamer-id', streamerId);
+                    span.setAttribute('data-current-username', newUsername);
+                    span.setAttribute('title', 'Click to edit username');
+                    span.textContent = newUsername || 'Unnamed Streamer';
+                    
+                    inputElement.parentNode.replaceChild(span, inputElement);
+                    
+                    // Re-add event listener
+                    span.addEventListener('click', function() {
+                        editUsername(streamerId, newUsername, this);
+                    });
+                } else {
+                    showNotification('Failed to update username: ' + (data.error || 'Unknown error'), 'error');
+                    // Revert to original
+                    const span = document.createElement('span');
+                    span.className = 'username-display cursor-pointer hover:text-pump-pink transition-colors';
+                    span.setAttribute('data-streamer-id', streamerId);
+                    span.setAttribute('data-current-username', inputElement.value);
+                    span.setAttribute('title', 'Click to edit username');
+                    span.textContent = inputElement.value || 'Unnamed Streamer';
+                    
+                    inputElement.parentNode.replaceChild(span, inputElement);
+                    
+                    // Re-add event listener
+                    span.addEventListener('click', function() {
+                        editUsername(streamerId, inputElement.value, this);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Update username error:', error);
+                showNotification('Failed to update username. Please try again.', 'error');
+                // Revert to original
+                const span = document.createElement('span');
+                span.className = 'username-display cursor-pointer hover:text-pump-pink transition-colors';
+                span.setAttribute('data-streamer-id', streamerId);
+                span.setAttribute('data-current-username', inputElement.value);
+                span.setAttribute('title', 'Click to edit username');
+                span.textContent = inputElement.value || 'Unnamed Streamer';
+                
+                inputElement.parentNode.replaceChild(span, inputElement);
+                
+                // Re-add event listener
+                span.addEventListener('click', function() {
+                    editUsername(streamerId, inputElement.value, this);
+                });
+            });
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-red-900/20 border-red-500 text-red-400';
+            notification.className = `fixed top-4 right-4 z-50 ${bgColor} border px-4 py-2 rounded-lg text-sm max-w-md`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

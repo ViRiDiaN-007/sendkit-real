@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="/css/style.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+</head>
+<body class="bg-dark-bg text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-rocket text-black text-sm"></i>
+                        </div>
+                        <span class="text-xl font-bold text-green-400">SendKit</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors duration-200">Login</a>
+                    <a href="/auth/register" class="bg-gradient-to-r from-green-400 to-green-600 text-black px-4 py-2 rounded-lg font-medium transition-colors duration-200 hover:from-green-500 hover:to-green-700">Sign Up</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div class="text-center">
+                <h1 class="text-4xl md:text-6xl font-bold text-white mb-6 text-shadow-lg">
+                    The Ultimate
+                    <span class="text-green-400">PumpFun</span>
+                    <br>Dashboard
+                </h1>
+                <p class="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
+                    Professional streaming tools for content creators with TTS, polls, and automod features. 
+                    Seamlessly integrate with OBS and engage your audience like never before.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="/auth/register" class="text-lg px-8 py-4 shadow-glow-green bg-gradient-to-r from-green-400 to-green-600 text-black font-semibold rounded-lg hover:from-green-500 hover:to-green-700 transition-all duration-300 transform hover:scale-105">
+                        Get Started Free
+                    </a>
+                    <a href="#features" class="btn-secondary text-lg px-8 py-4">
+                        Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Subtle pulsing background lights -->
+        <div class="absolute inset-0 -z-10">
+            <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-green-400/30 rounded-full blur-3xl animate-pulse"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-48 h-48 bg-green-600/30 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+            <div class="absolute top-1/2 left-1/2 w-16 h-16 bg-green-500/25 rounded-full blur-2xl animate-pulse" style="animation-delay: 2s;"></div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-dark-card/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
+                    Everything You Need to Stream
+                </h2>
+                <p class="text-xl text-gray-300 max-w-2xl mx-auto">
+                    Professional tools designed for content creators
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- TTS Feature -->
+                <div class="card shadow-glow-green hover:shadow-glow-green transition-all duration-300">
+                    <div class="w-12 h-12 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Text-to-Speech</h3>
+                    <p class="text-gray-300 mb-4">
+                        Convert viewer messages and donations into speech. Customize voice, rate, and volume settings.
+                    </p>
+                    <ul class="text-sm text-gray-400 space-y-1">
+                        <li>• Multiple voice options</li>
+                        <li>• Donation-gated TTS</li>
+                        <li>• Real-time audio generation</li>
+                        <li>• OBS browser source integration</li>
+                    </ul>
+                </div>
+
+                <!-- Poll Feature -->
+                <div class="card shadow-glow-green hover:shadow-glow-green transition-all duration-300">
+                    <div class="w-12 h-12 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Interactive Polls</h3>
+                    <p class="text-gray-300 mb-4">
+                        Create engaging polls for your viewers. Real-time results with beautiful overlays.
+                    </p>
+                    <ul class="text-sm text-gray-400 space-y-1">
+                        <li>• Live poll creation</li>
+                        <li>• Real-time voting</li>
+                        <li>• Customizable duration</li>
+                        <li>• Beautiful OBS overlays</li>
+                    </ul>
+                </div>
+
+                <!-- Automod Feature -->
+                <div class="card shadow-glow-green hover:shadow-glow-green transition-all duration-300">
+                    <div class="w-12 h-12 bg-gradient-to-r from-green-400 to-green-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Automod</h3>
+                    <p class="text-gray-300 mb-4">
+                        Keep your chat clean with intelligent moderation. Promote your bot and set custom filters.
+                    </p>
+                    <ul class="text-sm text-gray-400 space-y-1">
+                        <li>• Bot promotion to mod</li>
+                        <li>• Custom word filters</li>
+                        <li>• User ban management</li>
+                        <li>• Automated timeouts</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
+                    How It Works
+                </h2>
+                <p class="text-xl text-gray-300 max-w-2xl mx-auto">
+                    Get up and running in minutes with our simple setup process
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+                        1
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Sign Up</h3>
+                    <p class="text-gray-300">
+                        Create your account and connect your wallet address
+                    </p>
+                </div>
+
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+                        2
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Configure</h3>
+                    <p class="text-gray-300">
+                        Set up your TTS, poll, and automod preferences
+                    </p>
+                </div>
+
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+                        3
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-3">Stream</h3>
+                    <p class="text-gray-300">
+                        Add browser sources to OBS and start engaging your audience
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 bg-gradient-to-r from-green-400/20 to-green-600/20">
+        <div class="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">
+                Ready to Enhance Your Streams?
+            </h2>
+            <p class="text-xl text-gray-300 mb-8">
+                Join thousands of content creators who are already using our platform
+            </p>
+            <a href="/auth/register" class="text-lg px-8 py-4 shadow-glow-green bg-gradient-to-r from-green-400 to-green-600 text-black font-semibold rounded-lg hover:from-green-500 hover:to-green-700 transition-all duration-300 transform hover:scale-105">
+                Start Your Free Account
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark-card border-t border-dark-border">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="text-center text-sm text-gray-400">
+                <p>&copy; 2024 SendKit Dashboard. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for Pump.fun theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-dark-bg text-white;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-pump-purple to-pump-pink hover:from-pump-purple/90 hover:to-pump-pink/90 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply bg-dark-card hover:bg-dark-border text-white font-semibold py-2 px-4 rounded-lg border border-dark-border transition-all duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+  }
+  
+  .btn-success {
+    @apply bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+  }
+  
+  .card {
+    @apply bg-dark-card border border-dark-border rounded-xl p-6 shadow-xl backdrop-blur-sm;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pump-purple focus:border-transparent transition-all duration-200;
+  }
+  
+  .select-field {
+    @apply w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pump-purple focus:border-transparent transition-all duration-200;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-gray-300 mb-2;
+  }
+  
+  .status-indicator {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-online {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .status-offline {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .status-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .gradient-text {
+    @apply bg-gradient-to-r from-pump-purple to-pump-pink bg-clip-text text-transparent;
+  }
+  
+  .glow-effect {
+    @apply shadow-lg shadow-pump-purple/25;
+  }
+  
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite alternate;
+  }
+  
+  .bounce-slow {
+    animation: bounce-slow 2s infinite;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .text-shadow-lg {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  }
+  
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+}
+
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(139, 92, 246, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.8), 0 0 30px rgba(139, 92, 246, 0.6);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-dark-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-dark-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full h-8 w-8 border-b-2 border-pump-purple;
+}
+
+/* Poll progress bars */
+.poll-bar {
+  @apply w-full bg-dark-border rounded-full h-3 overflow-hidden;
+}
+
+.poll-fill {
+  @apply h-full bg-gradient-to-r from-pump-purple to-pump-pink transition-all duration-500 ease-out;
+}
+
+/* TTS message display */
+.tts-message {
+  @apply bg-dark-card border border-pump-purple/30 rounded-lg p-4 mb-4 animate-pulse;
+}
+
+.tts-message.active {
+  @apply border-pump-purple shadow-lg shadow-pump-purple/25;
+}
+
+/* Notification styles */
+.notification {
+  @apply fixed top-4 right-4 z-50 max-w-sm w-full bg-dark-card border border-dark-border rounded-lg shadow-lg transform transition-all duration-300;
+}
+
+.notification.success {
+  @apply border-green-500 bg-green-900/20;
+}
+
+.notification.error {
+  @apply border-red-500 bg-red-900/20;
+}
+
+.notification.warning {
+  @apply border-yellow-500 bg-yellow-900/20;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .card {
+    @apply p-4;
+  }
+  
+  .btn-primary, .btn-secondary, .btn-danger, .btn-success {
+    @apply py-3 px-6 text-sm;
+  }
+}
