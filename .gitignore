@@ -85,7 +85,6 @@ dist
 
 # Gatsby files
 .cache/
-public
 
 # Storybook build outputs
 .out
@@ -112,4 +111,3 @@ ehthumbs.db
 Thumbs.db
 
 # Build outputs
-public/css/style.css
