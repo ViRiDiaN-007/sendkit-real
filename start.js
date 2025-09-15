@@ -20,7 +20,8 @@ buildProcess.on('close', (code) => {
     console.log('🌐 Starting server...');
     const serverProcess = spawn('node', ['server.js'], {
       stdio: 'inherit',
-      shell: true
+      shell: true,
+      env: { ...process.env, DB_TYPE: 'sqlite' }
     });
     
     serverProcess.on('close', (code) => {

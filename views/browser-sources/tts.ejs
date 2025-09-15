@@ -102,6 +102,28 @@
             border-color: #EF4444;
         }
         
+        .tts-cooldown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 26, 46, 0.9);
+            border: 2px solid #F59E0B;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #F59E0B;
+            font-size: 16px;
+            font-weight: 600;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
+        }
+        
+        .tts-cooldown.hidden {
+            display: none;
+        }
+        
         .audio-overlay {
             position: fixed;
             top: 0;
@@ -202,6 +224,12 @@
             Queue: <span id="queue-count">0</span>
         </div>
         
+        <div id="tts-cooldown" class="tts-cooldown hidden">
+            <div style="font-size: 24px; margin-bottom: 10px;">⏰</div>
+            <div>TTS Cooldown Active</div>
+            <div id="cooldown-timer" style="font-size: 14px; margin-top: 5px; color: #A78BFA;"></div>
+        </div>
+        
         <div id="tts-content">
             <div class="no-tts">
                 <div style="font-size: 48px; margin-bottom: 20px;">🎤</div>
@@ -231,6 +259,9 @@
         let currentMessage = null;
         let messageTimeout = null;
         let audioEnabled = false;
+        let lastTTSPlayTime = 0;
+        let cooldownInterval = null;
+        const TTS_COOLDOWN_MS = 2000; // 2 seconds cooldown
         
         // Auto-enable audio on page load
         function autoEnableAudio() {
@@ -378,6 +409,7 @@
         });
         
         // Join streamer room
+        console.log('🎤 [BROWSER] Joining streamer room:', streamerId);
         socket.emit('join-streamer', streamerId);
         
         // Try to auto-enable audio on load
@@ -410,6 +442,7 @@
         
         // Handle TTS events
         socket.on('tts-request', (data) => {
+            console.log('🎤 [BROWSER] Received tts-request event:', data);
             showTTSMessage(data);
         });
         
@@ -422,9 +455,13 @@
         });
         
         function showTTSMessage(data) {
+            console.log('🎤 [BROWSER] showTTSMessage called with data:', data);
             const content = document.getElementById('tts-content');
             const queueDisplay = document.getElementById('tts-queue');
             const queueCount = document.getElementById('queue-count');
+            
+            console.log('🎤 [BROWSER] Content element:', content);
+            console.log('🎤 [BROWSER] Audio enabled:', audioEnabled);
             
             // Clear any existing message
             hideTTSMessage();
@@ -450,6 +487,7 @@
             }
             
             // Play TTS audio using Web Speech API
+            console.log('🎤 [BROWSER] About to play TTS audio for message:', data.message);
             playTTSAudio(data.message);
             
             // Set timeout to hide message after speaking duration
@@ -462,20 +500,36 @@
         }
         
         function playTTSAudio(message) {
+            console.log('🎤 [BROWSER] playTTSAudio called with message:', message);
+            console.log('🎤 [BROWSER] Audio enabled:', audioEnabled);
+            
+            // Check TTS cooldown
+            const now = Date.now();
+            const timeSinceLastTTS = now - lastTTSPlayTime;
+            
+            if (timeSinceLastTTS < TTS_COOLDOWN_MS) {
+                const remainingCooldown = Math.ceil((TTS_COOLDOWN_MS - timeSinceLastTTS) / 1000);
+                console.log(`⏰ [BROWSER] TTS cooldown active, ${remainingCooldown}s remaining. Skipping TTS for: "${message}"`);
+                showCooldownIndicator(remainingCooldown);
+                return;
+            }
+            
             // Check if audio is enabled
             if (!audioEnabled) {
-                console.log('Audio not enabled, showing permission button');
+                console.log('🎤 [BROWSER] Audio not enabled, showing permission button');
                 checkAudioPermission();
                 return;
             }
             
             // Check if speech synthesis is supported
             if ('speechSynthesis' in window) {
+                console.log('🎤 [BROWSER] Speech synthesis supported, creating utterance');
                 // Stop any current speech
                 speechSynthesis.cancel();
                 
                 // Create speech utterance
                 const utterance = new SpeechSynthesisUtterance(message);
+                console.log('🎤 [BROWSER] Created utterance:', utterance);
                 
                 // Configure voice settings
                 utterance.rate = 1.0; // Speech rate
@@ -519,6 +573,11 @@
             // Handle speech events
             utterance.onstart = () => {
                 console.log('TTS started speaking:', utterance.text);
+                // Update last TTS play time when speech actually starts
+                lastTTSPlayTime = Date.now();
+                console.log(`⏰ [BROWSER] TTS cooldown set until ${new Date(lastTTSPlayTime + TTS_COOLDOWN_MS).toISOString()}`);
+                // Hide cooldown indicator since TTS is now playing
+                hideCooldownIndicator();
             };
             
             utterance.onend = () => {
@@ -584,6 +643,44 @@
             const minutes = words / 150;
             const seconds = Math.max(minutes * 60, 3); // Minimum 3 seconds
             return Math.min(seconds * 1000, 10000); // Maximum 10 seconds
+        }
+        
+        // Show cooldown indicator
+        function showCooldownIndicator(remainingSeconds) {
+            const cooldownDiv = document.getElementById('tts-cooldown');
+            const timerDiv = document.getElementById('cooldown-timer');
+            
+            cooldownDiv.classList.remove('hidden');
+            timerDiv.textContent = `${remainingSeconds}s remaining`;
+            
+            // Clear any existing cooldown interval
+            if (cooldownInterval) {
+                clearInterval(cooldownInterval);
+            }
+            
+            // Update timer every second
+            cooldownInterval = setInterval(() => {
+                const now = Date.now();
+                const timeSinceLastTTS = now - lastTTSPlayTime;
+                const remaining = Math.ceil((TTS_COOLDOWN_MS - timeSinceLastTTS) / 1000);
+                
+                if (remaining <= 0) {
+                    hideCooldownIndicator();
+                } else {
+                    timerDiv.textContent = `${remaining}s remaining`;
+                }
+            }, 1000);
+        }
+        
+        // Hide cooldown indicator
+        function hideCooldownIndicator() {
+            const cooldownDiv = document.getElementById('tts-cooldown');
+            cooldownDiv.classList.add('hidden');
+            
+            if (cooldownInterval) {
+                clearInterval(cooldownInterval);
+                cooldownInterval = null;
+            }
         }
         
         // Request initial stats

@@ -7,6 +7,7 @@ const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const flash = require('express-flash');
 const http = require('http');
 const socketIo = require('socket.io');
 require('dotenv').config();
@@ -132,6 +133,9 @@ class SendKitApp {
     // Passport middleware
     this.app.use(passport.initialize());
     this.app.use(passport.session());
+    
+    // Flash messages
+    this.app.use(flash());
 
     // Static files
     this.app.use(express.static(path.join(__dirname, 'public')));

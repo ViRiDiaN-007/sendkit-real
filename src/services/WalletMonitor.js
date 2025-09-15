@@ -5,14 +5,21 @@ class WalletMonitor extends EventEmitter {
   constructor() {
     super();
     
+    // Use multiple RPC endpoints for better reliability
+    this.rpcEndpoints = [
+      process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+      'https://mainnet.helius-rpc.com/?api-key=1c17dfcf-e870-42b1-af2c-b834175b0adc',
+      'https://solana-api.projectserum.com'
+    ];
+    this.currentRpcIndex = 0;
     this.connection = new Connection(
-      process.env.SOLANA_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=1c17dfcf-e870-42b1-af2c-b834175b0adc',
+      this.rpcEndpoints[this.currentRpcIndex],
       'confirmed'
     );
     
     this.monitoredWallets = new Map();
     this.monitoringInterval = null;
-    this.checkInterval = 5000; // Check every 5 seconds with Helius RPC
+    this.checkInterval = 10000; // Check every 10 seconds (only checking most recent transaction)
   }
 
   // Start monitoring a wallet for incoming SOL donations
@@ -96,6 +103,16 @@ class WalletMonitor extends EventEmitter {
     }
   }
 
+  // Switch to next RPC endpoint
+  switchToNextRpc() {
+    this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcEndpoints.length;
+    this.connection = new Connection(
+      this.rpcEndpoints[this.currentRpcIndex],
+      'confirmed'
+    );
+    console.log(`🔄 [WALLET MONITOR] Switched to RPC endpoint: ${this.rpcEndpoints[this.currentRpcIndex]}`);
+  }
+
   // Check transactions for a specific wallet
   async checkWalletTransactions(walletAddress, walletData) {
     try {
@@ -131,18 +148,20 @@ class WalletMonitor extends EventEmitter {
         return;
       }
 
-      // We have a new transaction! Get more details about it
-      console.log(`🆕 [WALLET MONITOR] New transaction detected for ${walletAddress}: ${latestSignature}`);
-      
-      // Process the new transaction
+      // We have a new transaction! Check if it's recent enough before processing
       const transactionTime = signatures[0].blockTime ? signatures[0].blockTime * 1000 : Date.now();
-      console.log(`🕐 [WALLET MONITOR] Transaction time: ${new Date(transactionTime).toISOString()}, Start time: ${new Date(walletData.startTime).toISOString()}`);
+      const now = Date.now();
+      const maxAge = 5 * 60 * 1000; // Only process transactions from the last 5 minutes
       
-      if (transactionTime >= walletData.startTime) {
+      console.log(`🆕 [WALLET MONITOR] New transaction detected for ${walletAddress}: ${latestSignature}`);
+      console.log(`🕐 [WALLET MONITOR] Transaction time: ${new Date(transactionTime).toISOString()}, Age: ${Math.round((now - transactionTime) / 1000)}s`);
+      
+      // Only process very recent transactions to avoid storage issues
+      if (transactionTime >= walletData.startTime && (now - transactionTime) <= maxAge) {
         console.log(`✅ [WALLET MONITOR] Transaction is recent enough, processing...`);
         await this.processTransaction(latestSignature, walletAddress, walletAddress);
       } else {
-        console.log(`⏰ [WALLET MONITOR] Transaction too old, skipping...`);
+        console.log(`⏰ [WALLET MONITOR] Transaction too old (${Math.round((now - transactionTime) / 1000)}s), skipping to avoid storage issues...`);
       }
 
       // Update our last signature
@@ -150,27 +169,28 @@ class WalletMonitor extends EventEmitter {
       console.log(`🔍 [WALLET MONITOR] Updated last signature for ${walletAddress}: ${latestSignature}`);
 
     } catch (error) {
+      // Handle connection errors by switching RPC endpoints
+      if (error.message && (
+        error.message.includes('ENOTFOUND') || 
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('timeout') ||
+        error.message.includes('fetch failed')
+      )) {
+        console.log(`⚠️ Connection error for wallet ${walletAddress}, switching RPC endpoint`);
+        this.switchToNextRpc();
+        return;
+      }
+      
       // Handle rate limiting gracefully
       if (error.message && error.message.includes('429')) {
         console.log(`⚠️ Rate limited for wallet ${walletAddress}, will retry later`);
         return;
       }
+      
       // Handle RPC storage errors with exponential backoff
       if (error.code === -32019 || (error.message && error.message.includes('Failed to query long-term storage'))) {
-        console.log(`⚠️ RPC storage error for wallet ${walletAddress}, implementing exponential backoff`);
-        
-        // Implement exponential backoff with jitter
-        const baseDelay = 5000; // 5 seconds base delay
-        const maxDelay = 60000; // 60 seconds max delay
-        const retryCount = walletData.retryCount || 0;
-        const delay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
-        const jitter = Math.random() * 1000; // Add up to 1 second of jitter
-        const totalDelay = delay + jitter;
-        
-        walletData.retryCount = retryCount + 1;
-        walletData.nextRetryTime = Date.now() + totalDelay;
-        
-        console.log(`⏰ [WALLET MONITOR] Retrying ${walletAddress} in ${Math.round(totalDelay/1000)}s (attempt ${retryCount + 1})`);
+        console.log(`⚠️ RPC storage error for wallet ${walletAddress}, switching RPC endpoint`);
+        this.switchToNextRpc();
         return;
       }
       
@@ -187,11 +207,16 @@ class WalletMonitor extends EventEmitter {
     try {
       console.log(`🔍 [WALLET MONITOR] Processing transaction ${signature} for wallet ${walletAddress} (streamer: ${streamerAddress})`);
       
-      // Get transaction details
-      const transaction = await this.connection.getTransaction(signature, {
-        commitment: 'confirmed',
-        maxSupportedTransactionVersion: 0
-      });
+      // Get transaction details with timeout and error handling
+      const transaction = await Promise.race([
+        this.connection.getTransaction(signature, {
+          commitment: 'confirmed',
+          maxSupportedTransactionVersion: 0
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction fetch timeout')), 10000)
+        )
+      ]);
 
       if (!transaction) {
         console.log(`❌ [WALLET MONITOR] Transaction not found for signature: ${signature}`);
@@ -267,14 +292,21 @@ class WalletMonitor extends EventEmitter {
       }
 
     } catch (error) {
+      // Handle storage errors by skipping the transaction
+      if (error.code === -32019 || (error.message && error.message.includes('Failed to query long-term storage'))) {
+        console.log(`⚠️ Storage error processing transaction ${signature}, skipping (transaction too old)`);
+        return;
+      }
+      
+      // Handle timeout errors
+      if (error.message && error.message.includes('timeout')) {
+        console.log(`⚠️ Timeout processing transaction ${signature}, skipping`);
+        return;
+      }
+      
       // Handle rate limiting gracefully
       if (error.message && error.message.includes('429')) {
         console.log(`⚠️ Rate limited processing transaction ${signature}, will retry later`);
-        return;
-      }
-      // Handle RPC storage errors
-      if (error.message && error.message.includes('Failed to query long-term storage')) {
-        console.log(`⚠️ RPC storage error for transaction ${signature}, will retry later`);
         return;
       }
       console.error(`❌ [WALLET MONITOR] Error processing transaction ${signature}:`, error);

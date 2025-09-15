@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const config = require('../../config');
 const { getAllBrowserSourceUrls } = require('../utils/browserSource');
 
 // Main dashboard
@@ -127,7 +128,7 @@ router.get('/add-streamer', (req, res) => {
   res.render('dashboard/add-streamer', {
     title: 'Add New Streamer',
     user: req.user,
-    baseUrl: `${req.protocol}://${req.get('host')}`
+    baseUrl: config.baseUrl
   });
 });
 
@@ -156,21 +157,26 @@ router.post('/add-streamer', async (req, res) => {
         title: 'Add New Streamer',
         user: user,
         error: errors.join(', '),
-        formData: req.body
+        formData: req.body,
+        baseUrl: config.baseUrl
       });
     }
     
     // Generate streamer ID
     const streamerId = `streamer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('Generated streamer ID:', streamerId);
     
     // Create streamer config
-    await req.databaseService.createStreamerConfig(user.id, {
+    const configData = {
+      user_id: user.id,
       streamer_id: streamerId,
       username: streamerName || null,
       wallet_address: walletAddress,
-      token_address: tokenAddress || '',
-      is_active: true
-    });
+      token_address: tokenAddress || ''
+    };
+    console.log('Config data:', configData);
+    
+    await req.databaseService.createStreamerConfig(configData);
     
     // Initialize default settings
     await initializeDefaultSettings(req.databaseService, streamerId);
@@ -196,7 +202,8 @@ router.post('/add-streamer', async (req, res) => {
       title: 'Add New Streamer',
       user: req.user,
       error: 'Failed to create streamer',
-      formData: req.body
+      formData: req.body,
+      baseUrl: `${req.protocol}://${req.get('host')}`
     });
   }
 });

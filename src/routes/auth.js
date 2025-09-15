@@ -82,13 +82,13 @@ router.post('/register', async (req, res) => {
     }
     
     // Check if user already exists
-    const existingUser = await req.databaseService.getUserByEmail(email);
+    const existingUser = await req.databaseService.findUserByEmail(email);
     if (existingUser) {
       return res.redirect('/auth/register?error=email_already_exists');
     }
     
     // Check if username is taken
-    const existingUsername = await req.databaseService.getUserByUsername(username);
+    const existingUsername = await req.databaseService.findUserByUsername(username);
     if (existingUsername) {
       return res.redirect('/auth/register?error=username_taken');
     }
