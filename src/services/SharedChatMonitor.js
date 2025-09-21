@@ -2,11 +2,10 @@ const PumpChatClient = require('../lib/viri-pump-client.js').PumpChatClient;
 const EventEmitter = require('events');
 
 class SharedChatMonitor extends EventEmitter {
-  constructor(streamerId, tokenAddress, proxy = null) {
+  constructor(streamerId, tokenAddress) {
     super();
     this.streamerId = streamerId;
     this.tokenAddress = tokenAddress;
-    this.proxy = proxy;
     this.client = null;
     this.isConnected = false;
     this.subscribers = new Set(); // Track which services are subscribed
@@ -17,12 +16,11 @@ class SharedChatMonitor extends EventEmitter {
 
   async connect() {
     try {
-      // Create pump chat client with proxy support
+      // Create pump chat client
       this.client = new PumpChatClient({
         roomId: this.tokenAddress,
         username: `monitor_${this.streamerId}`,
-        messageHistoryLimit: 50,
-        proxy: this.proxy
+        messageHistoryLimit: 50
       });
 
       // Set up event handlers
@@ -50,8 +48,8 @@ class SharedChatMonitor extends EventEmitter {
         this.attemptReconnect();
       });
 
-      // Connect with proxy
-      console.log(`🔗 Creating shared chat monitor for ${this.streamerId} with proxy: ${this.proxy ? 'YES' : 'NO'}`);
+      // Connect to chat
+      console.log(`🔗 Creating shared chat monitor for ${this.streamerId}`);
       this.client.connect();
       
     } catch (error) {

@@ -93,6 +93,12 @@ class DatabaseService {
           value TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS automod_actions (
+          id SERIAL PRIMARY KEY,
+          streamer_id VARCHAR(255) NOT NULL,
+          action_data JSONB NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
       ];
     } else if (this.dbType === 'sqlite') {
@@ -138,6 +144,12 @@ class DatabaseService {
           value TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS automod_actions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          streamer_id TEXT NOT NULL,
+          action_data TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`
       ];
     }
@@ -358,6 +370,19 @@ class DatabaseService {
       'UPDATE streamer_configs SET automod_settings = $1 WHERE streamer_id = $2' : 
       'UPDATE streamer_configs SET automod_settings = ? WHERE streamer_id = ?';
     await this.query(query, [settingsJson, streamerId]);
+  }
+
+  async logAutomodAction(streamerId, actionData) {
+    try {
+      const actionJson = JSON.stringify(actionData);
+      const query = this.dbType === 'postgresql' ? 
+        'INSERT INTO automod_actions (streamer_id, action_data, created_at) VALUES ($1, $2, CURRENT_TIMESTAMP)' : 
+        'INSERT INTO automod_actions (streamer_id, action_data, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)';
+      await this.query(query, [streamerId, actionJson]);
+    } catch (error) {
+      console.error('Error logging automod action:', error);
+      // Don't throw error - just log it
+    }
   }
 
   async createStreamerConfig(configData) {

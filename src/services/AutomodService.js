@@ -39,12 +39,15 @@ class AutomodService {
     try {
       const streamers = await this.databaseService.getAllStreamerConfigs();
       console.log(`📋 Found ${streamers.length} streamers for automod service`);
+      console.log(`🔍 [AUTOMOD DEBUG] Streamer IDs:`, streamers.map(s => s.streamer_id));
       
       for (const streamer of streamers) {
+        console.log(`🔍 [AUTOMOD DEBUG] Loading automod for streamer: ${streamer.streamer_id}`);
         await this.createStreamerAutomod(streamer.streamer_id);
       }
       
       console.log(`🚀 Loaded ${this.activeStreamers.size} active automod services`);
+      console.log(`🔍 [AUTOMOD DEBUG] Active streamer IDs:`, Array.from(this.activeStreamers.keys()));
     } catch (error) {
       console.error('❌ Error loading streamers for automod:', error);
     }
@@ -52,12 +55,32 @@ class AutomodService {
 
   async createStreamerAutomod(streamerId) {
     try {
+      console.log(`🔍 [AUTOMOD DEBUG] Creating automod service for streamer ${streamerId}`);
+      
       // Get automod settings
       let settings = await this.databaseService.getAutomodSettings(streamerId);
+      console.log(`🔍 [AUTOMOD DEBUG] Settings for ${streamerId}:`, settings);
+      
       if (!settings) {
         settings = this.getDefaultSettings();
         await this.databaseService.updateAutomodSettings(streamerId, settings);
         console.log(`🔧 Creating default automod settings for streamer ${streamerId}`);
+      } else {
+        // Ensure all new settings are present in existing settings
+        const defaultSettings = this.getDefaultSettings();
+        let needsUpdate = false;
+        
+        for (const [key, value] of Object.entries(defaultSettings)) {
+          if (settings[key] === undefined) {
+            settings[key] = value;
+            needsUpdate = true;
+          }
+        }
+        
+        if (needsUpdate) {
+          await this.databaseService.updateAutomodSettings(streamerId, settings);
+          console.log(`🔧 Updated automod settings for streamer ${streamerId} with new defaults`);
+        }
       }
 
       // Get streamer config
@@ -71,12 +94,20 @@ class AutomodService {
       if (settings.automodWalletAddress) {
         console.log(`🔍 [AUTOMOD] Found existing wallet: ${settings.automodWalletAddress} - auto-summoning...`);
         try {
-          await this.summonAutomodWallet(streamerId);
-          console.log(`✅ [AUTOMOD] Automatically summoned wallet for streamer ${streamerId}`);
+          // Check if we already have a client for this streamer to avoid duplicates
+          const existingStreamerData = this.activeStreamers.get(streamerId);
+          if (existingStreamerData && existingStreamerData.automodClient && existingStreamerData.automodClient.isActive()) {
+            console.log(`🔍 [AUTOMOD] Client already exists and is active for ${streamerId}, skipping summon`);
+          } else {
+            await this.summonAutomodWallet(streamerId);
+            console.log(`✅ [AUTOMOD] Automatically summoned wallet for streamer ${streamerId}`);
+          }
         } catch (error) {
           console.error(`❌ [AUTOMOD] Failed to auto-summon wallet for streamer ${streamerId}:`, error.message);
           // Don't throw error - just log it and continue
         }
+      } else {
+        console.log(`🔍 [AUTOMOD DEBUG] No automod wallet found for streamer ${streamerId} - wallet needs to be generated first`);
       }
 
       // Subscribe to shared chat monitor
@@ -99,6 +130,7 @@ class AutomodService {
       });
 
       console.log(`✅ Automod service created for streamer ${streamerId}`);
+      console.log(`🔍 [AUTOMOD DEBUG] Stored streamer data for ${streamerId}, total active: ${this.activeStreamers.size}`);
     } catch (error) {
       console.error(`❌ Error creating automod service for ${streamerId}:`, error);
     }
@@ -106,13 +138,48 @@ class AutomodService {
 
   async handleChatMessage(streamerId, message) {
     try {
+      console.log(`🔍 [AUTOMOD DEBUG] Received message for ${streamerId}: "${message.message}" from ${message.username}`);
+      console.log(`🔍 [AUTOMOD DEBUG] Active streamers:`, Array.from(this.activeStreamers.keys()));
+      
       const streamerData = this.activeStreamers.get(streamerId);
-      if (!streamerData || !streamerData.settings.enabled) {
+      if (!streamerData) {
+        console.log(`🔍 [AUTOMOD DEBUG] No streamer data found for ${streamerId}`);
+        console.log(`🔍 [AUTOMOD DEBUG] Available streamers:`, Array.from(this.activeStreamers.keys()));
+        console.log(`🔍 [AUTOMOD DEBUG] Attempting to create automod for ${streamerId}...`);
+        
+        // Try to create the automod service for this streamer
+        try {
+          await this.createStreamerAutomod(streamerId);
+          console.log(`✅ [AUTOMOD DEBUG] Created automod service for ${streamerId}`);
+          
+          // Try again to get the streamer data
+          const newStreamerData = this.activeStreamers.get(streamerId);
+          if (!newStreamerData) {
+            console.log(`❌ [AUTOMOD DEBUG] Still no streamer data after creation for ${streamerId}`);
+            return;
+          }
+        } catch (error) {
+          console.error(`❌ [AUTOMOD DEBUG] Failed to create automod for ${streamerId}:`, error);
+          return;
+        }
+      }
+      
+      if (!streamerData.settings.enabled) {
+        console.log(`🔍 [AUTOMOD DEBUG] Automod disabled for ${streamerId}`);
         return;
       }
 
+      console.log(`🔍 [AUTOMOD DEBUG] Settings for ${streamerId}:`, {
+        removeSlurs: streamerData.settings.removeSlurs,
+        removeCommonSpam: streamerData.settings.removeCommonSpam,
+        slurAction: streamerData.settings.slurAction,
+        spamAction: streamerData.settings.spamAction,
+        bannedWordAction: streamerData.settings.bannedWordAction
+      });
+
       // Test message against automod rules
       const testResult = await this.testAutomodRules(streamerId, message.message);
+      console.log(`🔍 [AUTOMOD DEBUG] Test result for "${message.message}":`, testResult);
       
       if (testResult.violations.length > 0) {
         console.log(`🚨 Automod violation detected for ${streamerId}:`, testResult);
@@ -120,8 +187,7 @@ class AutomodService {
         // Take action based on violation severity
         await this.takeModerationAction(streamerId, message, testResult);
         
-        // Update stats
-        this.updateStats(streamerId, testResult.action);
+        // Stats are now updated directly in the banUser method
         
         // Notify via socket.io
         if (this.io) {
@@ -133,6 +199,8 @@ class AutomodService {
             violations: testResult.violations
           });
         }
+      } else {
+        console.log(`🔍 [AUTOMOD DEBUG] No violations found in message: "${message.message}"`);
       }
     } catch (error) {
       console.error(`❌ Error handling chat message for ${streamerId}:`, error);
@@ -140,27 +208,49 @@ class AutomodService {
   }
 
   async takeModerationAction(streamerId, message, testResult) {
+    console.log(`🔍 [AUTOMOD DEBUG] Taking moderation action for ${streamerId}:`, {
+      message: message.message,
+      username: message.username,
+      violations: testResult.violations
+    });
+    
     const streamerData = this.activeStreamers.get(streamerId);
-    if (!streamerData) return;
+    if (!streamerData) {
+      console.log(`🔍 [AUTOMOD DEBUG] No streamer data for ${streamerId}`);
+      return;
+    }
 
     const settings = streamerData.settings;
     
     // Check if user is already banned
     if (settings.bannedUsers && settings.bannedUsers.includes(message.username)) {
+      console.log(`🔍 [AUTOMOD DEBUG] User ${message.username} already banned, skipping action`);
       return; // User already banned, no action needed
     }
 
-    // Only handle bans - remove timeout and warning logic
-    if (testResult.action === 'ban' && settings.autoBan) {
-      const banResult = await this.banUser(streamerId, message.username);
-      if (banResult.success) {
-        // Add user to banned list to prevent future actions
-        const bannedUsers = settings.bannedUsers || [];
-        if (!bannedUsers.includes(message.username)) {
-          bannedUsers.push(message.username);
-          await this.updateAutomodSettings(streamerId, {
-            bannedUsers: bannedUsers
-          });
+    // Handle different violation types with different actions
+    for (const violation of testResult.violations) {
+      if (violation.type === 'banned_words') {
+        console.log(`🔍 [AUTOMOD DEBUG] Processing banned words violation:`, violation.words);
+        
+        // Check if it's a slur or spam word
+        const slurs = await this.getSlurWords();
+        const spamWords = await this.getSpamWords();
+        
+        const isSlur = violation.words.some(word => slurs.includes(word.toLowerCase()));
+        const isSpam = violation.words.some(word => spamWords.includes(word.toLowerCase()));
+        
+        console.log(`🔍 [AUTOMOD DEBUG] Word classification:`, {
+          isSlur,
+          isSpam,
+          violationType: isSlur ? 'slur' : isSpam ? 'spam' : 'custom_banned_word'
+        });
+        
+        // All violations result in banning the user
+        console.log(`🔍 [AUTOMOD DEBUG] Banning user for ${isSlur ? 'slur' : isSpam ? 'spam' : 'custom banned word'}: ${message.username}`);
+        const banResult = await this.banUser(streamerId, message.username);
+        if (banResult.success) {
+          await this.addBannedUser(streamerId, message.username);
         }
       }
     }
@@ -216,8 +306,20 @@ class AutomodService {
       console.log(`🔍 [BAN] Response status: ${banResponse.status}`);
       console.log(`🔍 [BAN] Response data:`, banResponse.data);
       
-      if (banResponse.status === 200 || banResponse.status === 201) {
+      if (banResponse.status === 200 || banResponse.status === 201 || banResponse.status === 204) {
         console.log(`✅ Successfully banned user ${username} in ${streamerId}`);
+        
+        // Update moderation statistics
+        this.updateStats(streamerId, 'ban');
+        
+        // Log the ban action
+        await this.logAutomodAction(streamerId, {
+          action: 'ban_user',
+          username: username,
+          reason: 'AUTOMOD_BANNED_WORD',
+          timestamp: new Date().toISOString()
+        });
+        
         return { success: true, message: 'User banned successfully' };
       } else if (banResponse.status === 401 || banResponse.status === 403) {
         console.log(`❌ Auth rejected. Automod wallet must have moderator permissions for this room.`);
@@ -236,6 +338,18 @@ class AutomodService {
     // This would send a warning message
     console.log(`⚠️ Warning user ${username} in ${streamerId}`);
     // TODO: Implement warning system
+  }
+
+
+  async logAutomodAction(streamerId, actionData) {
+    try {
+      // Store in database for audit trail
+      if (this.databaseService) {
+        await this.databaseService.logAutomodAction(streamerId, actionData);
+      }
+    } catch (error) {
+      console.error('Error logging automod action:', error);
+    }
   }
 
   updateStats(streamerId, action) {
@@ -261,7 +375,18 @@ class AutomodService {
   async getAutomodSettings(streamerId) {
     if (this.databaseService) {
       const settings = await this.databaseService.getAutomodSettings(streamerId);
-      return settings || this.getDefaultSettings();
+      console.log(`🔍 [AUTOMOD DEBUG] Raw settings from DB for ${streamerId}:`, settings);
+      
+      if (settings) {
+        // Ensure all required fields are present
+        const defaultSettings = this.getDefaultSettings();
+        const mergedSettings = { ...defaultSettings, ...settings };
+        console.log(`🔍 [AUTOMOD DEBUG] Merged settings for ${streamerId}:`, mergedSettings);
+        return mergedSettings;
+      }
+      
+      console.log(`🔍 [AUTOMOD DEBUG] No settings found, using defaults for ${streamerId}`);
+      return this.getDefaultSettings();
     }
     return this.getDefaultSettings();
   }
@@ -280,7 +405,7 @@ class AutomodService {
         };
       }
       
-      const isConnected = streamerData?.automodClient?.isConnected() || false;
+      const isConnected = streamerData?.automodClient?.isActive() || false;
       
       return {
         hasWallet: true,
@@ -321,17 +446,34 @@ class AutomodService {
       
       // Store wallet in database
       if (this.databaseService) {
-        await this.databaseService.updateAutomodSettings(streamerId, {
+        const updatedSettings = {
           automodWalletAddress: publicKey,
           automodWalletPrivateKey: privateKey
-        });
+        };
+        await this.databaseService.updateAutomodSettings(streamerId, updatedSettings);
+        
+        // Update active streamers if they exist
+        const streamerData = this.activeStreamers.get(streamerId);
+        if (streamerData) {
+          streamerData.settings = { ...streamerData.settings, ...updatedSettings };
+          console.log(`🔍 [AUTOMOD] Updated active streamer settings for ${streamerId}`);
+        }
       }
       
       console.log(`🔑 Generated automod wallet for streamer ${streamerId}: ${publicKey}`);
       
+      // Automatically summon the wallet after generation
+      try {
+        await this.summonAutomodWallet(streamerId);
+        console.log(`✅ [AUTOMOD] Automatically summoned newly generated wallet for streamer ${streamerId}`);
+      } catch (error) {
+        console.error(`❌ [AUTOMOD] Failed to auto-summon newly generated wallet for streamer ${streamerId}:`, error.message);
+        // Don't fail the generation if summoning fails
+      }
+      
       return {
         success: true,
-        message: 'Automod wallet generated successfully',
+        message: 'Automod wallet generated and summoned successfully',
         walletAddress: publicKey,
         streamerId: streamerId
       };
@@ -447,16 +589,34 @@ class AutomodService {
       const streamerData = this.activeStreamers.get(streamerId);
       let automodClient = streamerData?.automodClient;
       
-      // If no existing client or it's disconnected, create a new one
-      if (!automodClient || !automodClient.isConnected()) {
-        console.log(`🔍 [AUTOMOD WALLET] Creating new client for streamer ${streamerId}`);
-        automodClient = new PumpChatClient({
-          roomId: streamerConfig.token_address,
-          username: `AutomodBot_${streamerId.substring(0, 8)}`,
-          messageHistoryLimit: 10
-        });
+      // If no existing client or it's disconnected, try to get the shared monitor first
+      if (!automodClient || !automodClient.isActive()) {
+        console.log(`🔍 [AUTOMOD WALLET] Checking for existing shared chat monitor for streamer ${streamerId}`);
+        
+        // Try to get the existing shared chat monitor
+        if (this.chatMonitorManager) {
+          const existingMonitor = this.chatMonitorManager.monitors.get(streamerId);
+          if (existingMonitor && existingMonitor.client && existingMonitor.isConnected) {
+            console.log(`🔍 [AUTOMOD WALLET] Reusing existing shared chat monitor for streamer ${streamerId}`);
+            automodClient = existingMonitor.client;
+          } else {
+            console.log(`🔍 [AUTOMOD WALLET] No existing shared monitor found, creating new client for streamer ${streamerId}`);
+            automodClient = new PumpChatClient({
+              roomId: streamerConfig.token_address,
+              username: `AutomodBot_${streamerId.substring(0, 8)}`,
+              messageHistoryLimit: 10
+            });
+          }
+        } else {
+          console.log(`🔍 [AUTOMOD WALLET] No chat monitor manager, creating new client for streamer ${streamerId}`);
+          automodClient = new PumpChatClient({
+            roomId: streamerConfig.token_address,
+            username: `AutomodBot_${streamerId.substring(0, 8)}`,
+            messageHistoryLimit: 10
+          });
+        }
       } else {
-        console.log(`🔍 [AUTOMOD WALLET] Reusing existing client for streamer ${streamerId}`);
+        console.log(`🔍 [AUTOMOD WALLET] Reusing existing automod client for streamer ${streamerId}`);
       }
       
       // Get or generate auth cookie for this streamer
@@ -494,18 +654,38 @@ class AutomodService {
       });
       
       // Store the client for potential future use
-      const streamerData = this.activeStreamers.get(streamerId);
       if (streamerData) {
         streamerData.automodClient = automodClient;
+        console.log(`🔍 [AUTOMOD DEBUG] Updated existing streamer data with automod client for ${streamerId}`);
+      } else {
+        // If no streamer data exists, create it
+        console.log(`🔍 [AUTOMOD WALLET] Creating streamer data for ${streamerId}`);
+        this.activeStreamers.set(streamerId, {
+          settings: automodSettings,
+          automodClient: automodClient,
+          stats: {
+            totalActions: 0,
+            warnings: 0,
+            timeouts: 0,
+            bans: 0
+          }
+        });
+        console.log(`🔍 [AUTOMOD DEBUG] Created new streamer data with automod client for ${streamerId}`);
       }
       
       // Connect to the chat if not already connected
-      if (!automodClient.isConnected()) {
+      if (!automodClient.isActive()) {
         console.log(`🔍 [AUTOMOD WALLET] Connecting to chat...`);
         automodClient.connect();
       } else {
         console.log(`🔍 [AUTOMOD WALLET] Client already connected`);
       }
+      
+      // Set up disconnect handler to clean up duplicate clients
+      automodClient.on('disconnected', () => {
+        console.log(`🔍 [AUTOMOD WALLET] Client disconnected for ${streamerId}, cleaning up...`);
+        this.cleanupDisconnectedClients(streamerId);
+      });
       
       return {
         success: true,
@@ -537,9 +717,36 @@ class AutomodService {
     }
   }
 
+  cleanupDisconnectedClients(streamerId) {
+    try {
+      console.log(`🔍 [CLEANUP] Cleaning up disconnected clients for streamer ${streamerId}`);
+      
+      // Check if we have a shared monitor that's still connected
+      if (this.chatMonitorManager) {
+        const sharedMonitor = this.chatMonitorManager.monitors.get(streamerId);
+        if (sharedMonitor && sharedMonitor.isConnected) {
+          console.log(`🔍 [CLEANUP] Found active shared monitor, updating automod client reference`);
+          const streamerData = this.activeStreamers.get(streamerId);
+          if (streamerData) {
+            streamerData.automodClient = sharedMonitor.client;
+            console.log(`✅ [CLEANUP] Updated automod client to use shared monitor for ${streamerId}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error cleaning up disconnected clients for ${streamerId}:`, error);
+    }
+  }
+
   async testAutomodRules(streamerId, testMessage) {
     try {
       const settings = await this.getAutomodSettings(streamerId);
+      console.log(`🔍 [AUTOMOD DEBUG] Testing message: "${testMessage}"`);
+      console.log(`🔍 [AUTOMOD DEBUG] Settings:`, {
+        removeSlurs: settings.removeSlurs,
+        removeCommonSpam: settings.removeCommonSpam,
+        bannedWords: settings.bannedWords?.length || 0
+      });
       
       const results = {
         message: testMessage,
@@ -550,24 +757,38 @@ class AutomodService {
       
       // Get all banned words including automatic filters
       let allBannedWords = [...(settings.bannedWords || [])];
+      console.log(`🔍 [AUTOMOD DEBUG] Custom banned words:`, allBannedWords);
       
       // Add automatic word filters if enabled
       if (settings.removeSlurs) {
         const slurs = await this.getSlurWords();
+        console.log(`🔍 [AUTOMOD DEBUG] Slur words loaded:`, slurs.slice(0, 5), `... (${slurs.length} total)`);
         allBannedWords = [...allBannedWords, ...slurs];
       }
       
       if (settings.removeCommonSpam) {
         const spamWords = await this.getSpamWords();
+        console.log(`🔍 [AUTOMOD DEBUG] Spam words loaded:`, spamWords.slice(0, 5), `... (${spamWords.length} total)`);
         allBannedWords = [...allBannedWords, ...spamWords];
       }
+      
+      console.log(`🔍 [AUTOMOD DEBUG] Total banned words to check: ${allBannedWords.length}`);
       
       // Check for banned words
       if (allBannedWords.length > 0) {
         const lowerMessage = testMessage.toLowerCase();
-        const foundWords = allBannedWords.filter(word => 
-          lowerMessage.includes(word.toLowerCase())
-        );
+        console.log(`🔍 [AUTOMOD DEBUG] Checking message: "${lowerMessage}"`);
+        
+        const foundWords = allBannedWords.filter(word => {
+          const wordLower = word.toLowerCase();
+          const found = lowerMessage.includes(wordLower);
+          if (found) {
+            console.log(`🔍 [AUTOMOD DEBUG] Found banned word: "${word}" in message`);
+          }
+          return found;
+        });
+        
+        console.log(`🔍 [AUTOMOD DEBUG] Found words:`, foundWords);
         
         if (foundWords.length > 0) {
           results.violations.push({
@@ -577,7 +798,10 @@ class AutomodService {
           });
           results.action = 'ban';
           results.confidence = 0.8;
+          console.log(`🔍 [AUTOMOD DEBUG] Violation detected!`, results);
         }
+      } else {
+        console.log(`🔍 [AUTOMOD DEBUG] No banned words configured`);
       }
       
       return results;
@@ -806,8 +1030,9 @@ class AutomodService {
       capsDetection: false, // Disabled - only check banned words
       linkDetection: false,
       emojiSpamDetection: false,
-      removeSlurs: false, // New: automatic slur filtering
-      removeCommonSpam: false // New: automatic spam word filtering
+      removeSlurs: true, // New: automatic slur filtering
+      removeCommonSpam: true, // New: automatic spam word filtering
+      // All actions are now just ban - no delete option
     };
   }
 

@@ -54,7 +54,7 @@
                     </div>
                 </div>
                 <div class="text-sm text-gray-400">
-                    <p>Generate a persistent wallet for this streamer's automod bot. The wallet will be stored securely and can be summoned to join the chat.</p>
+                    <p>Generate a wallet to be your AutoMod bot. Click "Summon Wallet" to bring it to your chat so you can assign it Mod permissions</p>
                 </div>
             </div>
         </div>
@@ -99,24 +99,29 @@
                     <h3 class="text-xl font-semibold text-white mb-4">Automatic Word Filters</h3>
                     <div class="space-y-6">
                         <!-- Remove Slurs -->
-                        <div class="flex items-start space-x-4">
-                            <input type="checkbox" id="remove-slurs" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
-                            <div>
-                                <label for="remove-slurs" class="text-lg font-medium text-white">Remove Slurs</label>
-                                <p class="text-gray-400 mt-1">Automatically add common slurs to the banned words list</p>
+                        <div class="space-y-4">
+                            <div class="flex items-start space-x-4">
+                                <input type="checkbox" id="remove-slurs" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
+                                <div class="flex-1">
+                                    <label for="remove-slurs" class="text-lg font-medium text-white">Remove Slurs</label>
+                                    <p class="text-gray-400 mt-1">Automatically detect and moderate common slurs</p>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Remove Common Spam -->
-                        <div class="flex items-start space-x-4">
-                            <input type="checkbox" id="remove-common-spam" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
-                            <div>
-                                <label for="remove-common-spam" class="text-lg font-medium text-white">Remove Common Spam</label>
-                                <p class="text-gray-400 mt-1">Automatically add common spam words to the banned words list</p>
+                        <div class="space-y-4">
+                            <div class="flex items-start space-x-4">
+                                <input type="checkbox" id="remove-common-spam" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
+                                <div class="flex-1">
+                                    <label for="remove-common-spam" class="text-lg font-medium text-white">Remove Common Spam</label>
+                                    <p class="text-gray-400 mt-1">Automatically detect and moderate common spam words</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
 
                 <!-- Moderation Settings -->
                 <div class="mb-8">
@@ -174,7 +179,10 @@
             loadAutomodSettings();
             loadModerationStats();
             loadWalletStatus();
+            
+            // Add event listeners for checkboxes
         });
+
 
         // Load automod settings
         async function loadAutomodSettings() {
@@ -199,6 +207,8 @@
                     document.getElementById('spam-detection').checked = settings.spamDetection || true;
                     document.getElementById('remove-slurs').checked = settings.removeSlurs || false;
                     document.getElementById('remove-common-spam').checked = settings.removeCommonSpam || false;
+                    
+                    // All actions are now just ban - no action selection needed
                 }
             } catch (error) {
                 console.error('Error loading automod settings:', error);
@@ -266,6 +276,7 @@
                 const spamDetection = document.getElementById('spam-detection').checked;
                 const removeSlurs = document.getElementById('remove-slurs').checked;
                 const removeCommonSpam = document.getElementById('remove-common-spam').checked;
+                // All actions are now just ban - no action selection needed
                 
                 const response = await fetch(`/dashboard/streamer/${streamerId}/automod-settings`, {
                     method: 'POST',

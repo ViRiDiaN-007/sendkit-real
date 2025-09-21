@@ -86,7 +86,6 @@ class PumpChatClient extends events_1.EventEmitter {
         this.roomId = options.roomId;
         this.username = options.username || "anonymous";
         this.messageHistoryLimit = options.messageHistoryLimit || 100;
-        this.proxy = options.proxy || null; // Proxy configuration
         // Initialize WebSocket client
         this.client = new websocket_1.default.client();
         
@@ -407,6 +406,9 @@ class PumpChatClient extends events_1.EventEmitter {
      * @private
      */
     handleNewMessage(message) {
+        // Debug: Log the message structure to see what fields are available
+        console.log(`🔍 [PUMP CHAT CLIENT] New message structure:`, JSON.stringify(message, null, 2));
+        
         // Add to message history
         this.messageHistory.push(message);
         // Maintain message history limit by removing oldest messages
@@ -567,25 +569,11 @@ class PumpChatClient extends events_1.EventEmitter {
         // Debug: Log all headers being sent
         console.log(`🔍 [PUMP CHAT CLIENT] WebSocket headers:`, JSON.stringify(headers, null, 2));
 
-        // Configure proxy if provided
-        let proxyOptions = undefined;
-        if (this.proxy) {
-            const proxyUrl = new URL(`http://${this.proxy}`);
-            proxyOptions = {
-                host: proxyUrl.hostname,
-                port: parseInt(proxyUrl.port) || 8080,
-                auth: proxyUrl.username && proxyUrl.password ? 
-                    `${proxyUrl.username}:${proxyUrl.password}` : undefined
-            };
-            console.log(`🔗 Using proxy: ${proxyUrl.hostname}:${proxyUrl.port}`);
-        }
-
         // Initiate WebSocket connection
         // EIO=4 specifies Engine.IO protocol version 4
         this.client.connect("wss://livechat.pump.fun/socket.io/?EIO=4&transport=websocket", undefined, // No specific protocol
         undefined, // Use default origin
-        headers,
-        proxyOptions);
+        headers);
     }
     /**
      * Disconnects from the chat room.

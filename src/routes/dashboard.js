@@ -539,6 +539,22 @@ router.get('/streamer/:streamerId/automod-settings', async (req, res) => {
     // Get automod settings
     const automodSettings = await req.databaseService.getAutomodSettings(streamerId);
     
+    // If no settings exist, return default settings
+    if (!automodSettings) {
+      const defaultSettings = {
+        enabled: true,
+        bannedWords: [],
+        spamDetection: true,
+        removeSlurs: true,
+        removeCommonSpam: true
+        // All actions are now just ban - no action selection needed
+      };
+      return res.json({ 
+        success: true, 
+        settings: defaultSettings
+      });
+    }
+    
     res.json({ 
       success: true, 
       settings: automodSettings
@@ -563,14 +579,20 @@ router.post('/streamer/:streamerId/automod-settings', async (req, res) => {
       return res.status(404).json({ error: 'Streamer not found or access denied' });
     }
     
-    // Update automod settings
+    // Get existing settings first
+    const existingSettings = await req.databaseService.getAutomodSettings(streamerId) || {};
+    
+    // Update automod settings - merge with existing settings
     const updatedSettings = {
+      ...existingSettings,
       bannedWords: bannedWords || [],
       spamDetection: spamDetection || false,
       removeSlurs: removeSlurs || false,
       removeCommonSpam: removeCommonSpam || false
+      // All actions are now just ban - no action selection needed
     };
     
+    console.log(`🔍 [DASHBOARD DEBUG] Updating settings for ${streamerId}:`, updatedSettings);
     await req.databaseService.updateAutomodSettings(streamerId, updatedSettings);
     console.log(`🔧 Updated automod settings for streamer ${streamerId}`);
     
