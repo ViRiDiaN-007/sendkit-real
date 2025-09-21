@@ -1,0 +1,7 @@
+# Spam words list for automod
+# One word or phrase per line, case insensitive matching
+# Lines starting with # are comments and will be ignored
+
+# Financial scams
+rugdefs
+FAKE FAKE lol real

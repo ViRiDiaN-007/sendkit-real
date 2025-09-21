@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -193,12 +193,15 @@
                                 <a href="/dashboard/streamer/<%= streamer.streamer_id %>" class="w-full btn-secondary text-center block">
                                     Manage Settings
                                 </a>
-                                <div class="grid grid-cols-2 gap-2">
+                                <div class="grid grid-cols-3 gap-2">
                                     <a href="/tts/<%= streamer.streamer_id %>" class="btn-secondary text-center block text-sm py-2">
                                         TTS
                                     </a>
                                     <a href="/poll/<%= streamer.streamer_id %>" class="btn-secondary text-center block text-sm py-2">
                                         Polls
+                                    </a>
+                                    <a href="/dashboard/streamer/<%= streamer.streamer_id %>/automod" class="btn-secondary text-center block text-sm py-2">
+                                        Automod
                                     </a>
                                 </div>
                             </div>
@@ -239,6 +242,7 @@
                 </div>
             <% } %>
         </div>
+
 
         <!-- Quick Actions -->
         <div class="card">
@@ -336,6 +340,7 @@
                     editUsername(streamerId, currentUsername, this);
                 });
             });
+
         });
 
         function copyToClipboard(text) {

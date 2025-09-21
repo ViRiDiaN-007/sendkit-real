@@ -1,11 +1,13 @@
 const EventEmitter = require('events');
 const { PumpChatClient } = require('../lib/viri-pump-client');
 const WalletMonitor = require('./WalletMonitor');
+const fs = require('fs').promises;
+const path = require('path');
 
 class IntegratedTTSService extends EventEmitter {
   constructor() {
     super();
-    this.streamers = new Map(); // streamerId -> { config, settings, chatClient, queue, stats, walletMonitor }
+    this.streamers = new Map(); // streamerId -> { config, settings, queue, stats, walletMonitor }
     this.databaseService = null;
     this.io = null;
     this.isInitialized = false;
@@ -13,9 +15,6 @@ class IntegratedTTSService extends EventEmitter {
     this.cooldowns = new Map(); // streamerId -> lastTTS time
     this.recentDonors = new Map(); // streamerId -> Map(walletAddress -> { timestamp, amount, streamerAddress })
     this.donorTimeout = 300000; // 5 minutes to use TTS after donation
-    this.processedMessages = new Set(); // Track processed messages to prevent duplicates
-    this.ttsCooldowns = new Map(); // streamerId -> lastTTS timestamp for cooldown
-    this.ttsCooldownDuration = 3000; // 3 second cooldown between TTS requests
     this.stats = {
       totalProcessed: 0,
       totalErrors: 0,
@@ -30,8 +29,9 @@ class IntegratedTTSService extends EventEmitter {
     console.log('✅ Integrated TTS Service initialized');
   }
 
-  async setDatabaseServiceAndLoadStreamers(databaseService) {
+  async setDatabaseServiceAndLoadStreamers(databaseService, chatMonitorManager) {
     this.databaseService = databaseService;
+    this.chatMonitorManager = chatMonitorManager;
     await this.loadAllStreamers();
   }
 
@@ -86,12 +86,13 @@ class IntegratedTTSService extends EventEmitter {
         }
       }
 
-      // Create chat client for monitoring donations
-      const chatClient = new PumpChatClient({
-        roomId: streamer.token_address,
-        username: `tts_bot_${String(streamerId).substring(0, 8)}`,
-        messageHistoryLimit: 50
-      });
+      // Subscribe to shared chat monitor
+      if (this.chatMonitorManager) {
+        await this.chatMonitorManager.subscribe(streamerId, streamer.token_address, 'TTS', (message) => {
+          // console.log(`🎤 TTS received raw message for ${streamerId}:`, JSON.stringify(message, null, 2));
+          this.handleChatMessage(streamerId, message);
+        });
+      }
       
       // Create wallet monitor for this streamer
       const walletMonitor = new WalletMonitor();
@@ -100,26 +101,11 @@ class IntegratedTTSService extends EventEmitter {
       walletMonitor.on('donation', (donation) => {
         this.handleDonation(streamerId, donation);
       });
-      
-      // Set up chat event handlers
-      chatClient.on('message', (message) => {
-        console.log(`🎤 TTS received raw message for ${streamerId}:`, JSON.stringify(message, null, 2));
-        this.handleChatMessage(streamerId, message);
-      });
-
-      chatClient.on('connected', () => {
-        console.log(`🎤 TTS chat connected for streamer ${streamerId} (token: ${streamer.token_address})`);
-      });
-
-      chatClient.on('error', (error) => {
-        console.error(`❌ TTS chat error for streamer ${streamerId}:`, error);
-      });
 
       // Store streamer configuration
       this.streamers.set(streamerId, {
         config: streamer,
         settings: ttsSettings,
-        chatClient: chatClient,
         walletMonitor: walletMonitor,
         queue: [],
         recentMessages: [], // Store recent TTS messages
@@ -135,7 +121,7 @@ class IntegratedTTSService extends EventEmitter {
 
       // Connect to chat if token address is available
       if (streamer.token_address) {
-        await chatClient.connect();
+        // Chat connection is now handled by shared chat monitor
       }
 
       // Start wallet monitoring if wallet address is available
@@ -192,8 +178,9 @@ class IntegratedTTSService extends EventEmitter {
       }
 
       // Disconnect chat client
-      if (streamer.chatClient) {
-        streamer.chatClient.disconnect();
+      // Unsubscribe from shared chat monitor
+      if (this.chatMonitorManager) {
+        this.chatMonitorManager.unsubscribe(streamerId, 'TTS');
       }
 
       // Remove from streamers map
@@ -278,41 +265,93 @@ class IntegratedTTSService extends EventEmitter {
     }
   }
 
+  // Check if message contains banned words (slurs, spam, or custom banned words)
+  async isMessageBanned(streamerId, message) {
+    try {
+      // Get automod settings for this streamer
+      const automodSettings = await this.databaseService.getAutomodSettings(streamerId);
+      if (!automodSettings) return false;
+
+      // Get all banned words including automatic filters
+      let allBannedWords = [...(automodSettings.bannedWords || [])];
+      
+      // Add automatic word filters if enabled
+      if (automodSettings.removeSlurs) {
+        const slurs = await this.getSlurWords();
+        allBannedWords = [...allBannedWords, ...slurs];
+      }
+      
+      if (automodSettings.removeCommonSpam) {
+        const spamWords = await this.getSpamWords();
+        allBannedWords = [...allBannedWords, ...spamWords];
+      }
+      
+      // Check for banned words
+      if (allBannedWords.length > 0) {
+        const lowerMessage = message.toLowerCase();
+        const foundWords = allBannedWords.filter(word => 
+          lowerMessage.includes(word.toLowerCase())
+        );
+        
+        if (foundWords.length > 0) {
+          console.log(`🚫 [TTS] Banned words detected in message for ${streamerId}: ${foundWords.join(', ')}`);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking banned words for TTS:', error);
+      return false; // Allow message through if there's an error
+    }
+  }
+
+  // Get slur words from file
+  async getSlurWords() {
+    try {
+      const filePath = path.join(__dirname, '../../data/slurs.txt');
+      const content = await fs.readFile(filePath, 'utf8');
+      
+      // Parse the file content, filtering out comments and empty lines
+      const words = content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+        .map(line => line.toLowerCase());
+      
+      return words;
+    } catch (error) {
+      console.error('Error reading slur words file:', error);
+      return [];
+    }
+  }
+
+  // Get spam words from file
+  async getSpamWords() {
+    try {
+      const filePath = path.join(__dirname, '../../data/spam.txt');
+      const content = await fs.readFile(filePath, 'utf8');
+      
+      // Parse the file content, filtering out comments and empty lines
+      const words = content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+        .map(line => line.toLowerCase());
+      
+      return words;
+    } catch (error) {
+      console.error('Error reading spam words file:', error);
+      return [];
+    }
+  }
+
   async handleChatMessage(streamerId, message) {
     try {
       const streamer = this.streamers.get(streamerId);
       if (!streamer || !streamer.settings.enabled) return;
 
-      // Create a unique message ID for deduplication based on content, user, and timestamp
-      const messageContent = message.message || message.text || message.content || '';
-      const userAddress = message.userAddress || message.user || message.sender || 'anonymous';
-      const messageTimestamp = message.timestamp || Date.now();
-      
-      // Create a more robust deduplication key using content + user + timestamp (rounded to nearest second)
-      const dedupeKey = `${streamerId}-${userAddress}-${messageContent}-${Math.floor(new Date(messageTimestamp).getTime() / 1000)}`;
-      
-      console.log(`🔍 [TTS] Checking dedupe key: ${dedupeKey}`);
-      console.log(`🔍 [TTS] Processed messages count: ${this.processedMessages.size}`);
-      
-      // Check if we've already processed this message
-      if (this.processedMessages.has(dedupeKey)) {
-        console.log(`🔄 [TTS] Duplicate message detected, skipping: ${dedupeKey}`);
-        return;
-      }
-      
-      // Mark message as processed
-      this.processedMessages.add(dedupeKey);
-      console.log(`✅ [TTS] Message marked as processed: ${dedupeKey}`);
-      
-      // Clean up old processed messages (keep only last 1000)
-      if (this.processedMessages.size > 1000) {
-        const messagesArray = Array.from(this.processedMessages);
-        this.processedMessages.clear();
-        // Keep only the last 500 messages
-        messagesArray.slice(-500).forEach(id => this.processedMessages.add(id));
-      }
-
-      console.log(`🎤 TTS received message for ${streamerId}:`, message);
+      // console.log(`🎤 TTS received message for ${streamerId}:`, message);
 
       // If donation gate is disabled, TTS all messages (no donation required)
       if (!streamer.settings.donation_gate_enabled) {
@@ -326,6 +365,7 @@ class IntegratedTTSService extends EventEmitter {
       }
 
       // If donation gate is enabled, check for recent donors first
+      const userAddress = message.userAddress || message.user || message.sender;
       if (userAddress && this.isRecentDonor(streamerId, userAddress)) {
         console.log(`🎤 Auto-TTS triggered for recent donor: ${message.username || message.user}: ${message.text || message.content || message.message}`);
         
@@ -362,7 +402,6 @@ class IntegratedTTSService extends EventEmitter {
     
     const donorData = streamerDonors.get(walletAddress);
     if (!donorData) {
-      console.log(`🔍 [TTS] Wallet ${walletAddress} not found in recent donors for ${streamerId}`);
       return false;
     }
     
@@ -435,35 +474,25 @@ class IntegratedTTSService extends EventEmitter {
 
   async processRegularTTS(streamerId, messageData) {
     try {
-      console.log(`🎤 [TTS] ===== PROCESSING REGULAR TTS =====`);
-      console.log(`🎤 [TTS] Streamer ID: ${streamerId}`);
-      console.log(`🎤 [TTS] Message Data:`, JSON.stringify(messageData, null, 2));
-      
-      // Check TTS cooldown
-      const now = Date.now();
-      const lastTTS = this.ttsCooldowns.get(streamerId);
-      if (lastTTS && (now - lastTTS) < this.ttsCooldownDuration) {
-        const remainingCooldown = Math.ceil((this.ttsCooldownDuration - (now - lastTTS)) / 1000);
-        console.log(`⏰ [TTS] Cooldown active for ${streamerId}, ${remainingCooldown}s remaining. Skipping TTS.`);
-        return;
-      }
-      
       const streamer = this.streamers.get(streamerId);
-      if (!streamer) {
-        console.log(`❌ [TTS] Streamer not found: ${streamerId}`);
-        return;
-      }
+      if (!streamer) return;
 
       const settings = streamer.settings;
-      console.log(`🔍 [TTS] Streamer settings:`, JSON.stringify(settings, null, 2));
+      
+      console.log(`🔍 [TTS] Processing regular TTS for ${streamerId} - auto_tts_enabled: ${settings.auto_tts_enabled}, enabled: ${settings.enabled}`);
       
       // Check if auto TTS is enabled for regular messages
       if (!settings.auto_tts_enabled) {
-        console.log(`❌ [TTS] Auto TTS disabled for ${streamerId} - settings.auto_tts_enabled = ${settings.auto_tts_enabled}`);
+        console.log(`❌ [TTS] Auto TTS disabled for ${streamerId}`);
         return;
       }
-      
-      console.log(`✅ [TTS] Auto TTS is enabled, continuing...`);
+
+      // Check for banned words
+      const isBanned = await this.isMessageBanned(streamerId, messageData.message);
+      if (isBanned) {
+        console.log(`🚫 [TTS] Message blocked due to banned words for ${streamerId}: ${messageData.message}`);
+        return;
+      }
 
       // Check cooldown
       if (this.isInCooldown(streamerId)) {
@@ -502,21 +531,13 @@ class IntegratedTTSService extends EventEmitter {
       // Update cooldown
       this.cooldowns.set(streamerId, Date.now());
 
-      console.log(`🎤 [TTS] Creating TTS request:`, JSON.stringify(ttsRequest, null, 2));
-      
       // Emit TTS event
-      console.log(`📡 [TTS] Emitting 'tts-request' event for ${streamerId}`);
       this.emit('tts-request', ttsRequest);
       
       // Broadcast to browser sources
-      console.log(`📡 [TTS] Broadcasting to subscribers for ${streamerId}`);
       this.broadcastToSubscribers(streamerId, 'tts-request', ttsRequest);
 
-      // Update TTS cooldown
-      this.ttsCooldowns.set(streamerId, now);
-      console.log(`⏰ [TTS] Cooldown set for ${streamerId} until ${new Date(now + this.ttsCooldownDuration).toISOString()}`);
-
-      console.log(`🎤 [TTS] Regular TTS queued for ${streamerId}: ${ttsMessage}`);
+      console.log(`🎤 Regular TTS queued for ${streamerId}: ${ttsMessage}`);
 
       // Process queue
       this.processQueue(streamerId);
@@ -562,15 +583,6 @@ class IntegratedTTSService extends EventEmitter {
 
   async processDonationTTS(streamerId, messageData) {
     try {
-      // Check TTS cooldown
-      const now = Date.now();
-      const lastTTS = this.ttsCooldowns.get(streamerId);
-      if (lastTTS && (now - lastTTS) < this.ttsCooldownDuration) {
-        const remainingCooldown = Math.ceil((this.ttsCooldownDuration - (now - lastTTS)) / 1000);
-        console.log(`⏰ [TTS] Cooldown active for ${streamerId}, ${remainingCooldown}s remaining. Skipping donation TTS.`);
-        return;
-      }
-
       const streamer = this.streamers.get(streamerId);
       if (!streamer) return;
 
@@ -588,7 +600,13 @@ class IntegratedTTSService extends EventEmitter {
 
       // Check minimum donation requirement - if user is in recent donors, they already met the requirement
       if (settings.donation_gate_enabled && !streamerDonors?.has(userAddress)) {
-        console.log(`❌ User ${userAddress} not found in recent donors for donation gate`);
+        return;
+      }
+
+      // Check for banned words
+      const isBanned = await this.isMessageBanned(streamerId, messageData.message);
+      if (isBanned) {
+        console.log(`🚫 [TTS] Donation message blocked due to banned words for ${streamerId}: ${messageData.message}`);
         return;
       }
 
@@ -630,10 +648,6 @@ class IntegratedTTSService extends EventEmitter {
       
       // Broadcast to browser sources
       this.broadcastToSubscribers(streamerId, 'tts-request', ttsRequest);
-
-      // Update TTS cooldown
-      this.ttsCooldowns.set(streamerId, now);
-      console.log(`⏰ [TTS] Cooldown set for ${streamerId} until ${new Date(now + this.ttsCooldownDuration).toISOString()}`);
 
       console.log(`🎤 TTS queued for ${streamerId}: ${ttsMessage}`);
 
@@ -753,19 +767,8 @@ class IntegratedTTSService extends EventEmitter {
   }
 
   broadcastToSubscribers(streamerId, event, data) {
-    console.log(`📡 [TTS] broadcastToSubscribers called:`);
-    console.log(`📡 [TTS] - Streamer ID: ${streamerId}`);
-    console.log(`📡 [TTS] - Event: ${event}`);
-    console.log(`📡 [TTS] - Data:`, JSON.stringify(data, null, 2));
-    console.log(`📡 [TTS] - IO available: ${!!this.io}`);
-    
     if (this.io) {
-      const room = `streamer-${streamerId}`;
-      console.log(`📡 [TTS] Broadcasting to room: ${room}`);
-      this.io.to(room).emit(event, data);
-      console.log(`📡 [TTS] Event sent successfully to room ${room}`);
-    } else {
-      console.log(`❌ [TTS] IO not available, cannot broadcast`);
+      this.io.to(`streamer-${streamerId}`).emit(event, data);
     }
   }
 
@@ -820,20 +823,8 @@ class IntegratedTTSService extends EventEmitter {
       this.broadcastToSubscribers(streamerId, 'tts-request', ttsRequest);
       console.log(`🎤 TTS test sent to browser source: ${message}`);
 
-      // For test TTS, just save the message without full processing
-      try {
-        await this.databaseService.saveTTSMessage(streamerId, {
-          id: ttsRequest.id,
-          text: message,
-          sender: 'Test User',
-          timestamp: new Date().toISOString(),
-          type: 'test',
-          amount: 0
-        });
-        console.log(`✅ Test TTS message saved to database`);
-      } catch (error) {
-        console.error(`❌ Error saving test TTS message:`, error);
-      }
+      // Simulate TTS processing
+      await this.simulateTTSProcessing(ttsRequest);
 
       return { success: true, message: 'TTS test completed' };
     } catch (error) {
@@ -893,11 +884,9 @@ class IntegratedTTSService extends EventEmitter {
 
   broadcastTTSMessage(streamerId, message) {
     if (this.io) {
-      this.io.to(`streamer-${streamerId}`).emit('tts-request', {
-        message: message.text || message,
-        walletAddress: message.walletAddress || 'Anonymous',
-        amount: message.amount || 0,
-        queueLength: 1
+      this.io.to(`streamer-${streamerId}`).emit('tts-message', {
+        type: 'tts-message',
+        message: message
       });
     }
   }

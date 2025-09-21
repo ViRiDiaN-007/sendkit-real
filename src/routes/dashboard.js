@@ -248,6 +248,37 @@ router.post('/streamer/:streamerId/delete', async (req, res) => {
       return res.status(404).json({ error: 'Streamer not found or access denied' });
     }
     
+    // Stop all services for this streamer
+    try {
+      // Stop TTS service
+      if (req.integratedTTSService) {
+        await req.integratedTTSService.stopStreamer(streamerId);
+      }
+      
+      // Stop Poll service
+      if (req.integratedPollService) {
+        await req.integratedPollService.stopStreamer(streamerId);
+      }
+      
+      // Stop Automod service
+      if (req.automodService) {
+        // Remove from active streamers
+        req.automodService.activeStreamers.delete(streamerId);
+      }
+      
+      // Unsubscribe from chat monitor
+      if (req.chatMonitorManager) {
+        req.chatMonitorManager.unsubscribe(streamerId, 'TTS');
+        req.chatMonitorManager.unsubscribe(streamerId, 'Poll');
+        req.chatMonitorManager.unsubscribe(streamerId, 'Automod');
+      }
+      
+      console.log(`🛑 Stopped all services for streamer ${streamerId}`);
+    } catch (serviceError) {
+      console.error('Error stopping services for streamer:', serviceError);
+      // Continue with deletion even if service stopping fails
+    }
+    
     // Delete streamer and all related data
     await req.databaseService.deleteStreamer(streamerId);
     
@@ -294,12 +325,14 @@ async function initializeDefaultSettings(databaseService, streamerId) {
       enabled: true,
       bot_wallet_address: '',
       mod_permissions: ['timeout', 'warn'],
-      banned_words: [],
+      bannedWords: [],
       banned_users: [],
-      timeout_duration: 300,
+      timeoutDuration: 30,
       max_warnings: 3,
       auto_timeout: true,
-      auto_ban: false
+      auto_ban: false,
+      spamDetection: true,
+      capsDetection: true
     });
     
     console.log(`✅ Default settings initialized for streamer ${streamerId}`);
@@ -426,6 +459,299 @@ router.post('/streamer/:streamerId/update-username', async (req, res) => {
   } catch (error) {
     console.error('Update username error:', error);
     res.status(500).json({ error: 'Failed to update username' });
+  }
+});
+
+// Get automod settings page
+router.get('/streamer/:streamerId/automod', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).render('error', { 
+        title: 'Streamer Not Found',
+        message: 'Streamer not found or access denied.',
+        user: req.user
+      });
+    }
+    
+    res.render('automod/settings', { 
+      title: 'Automod Settings',
+      user: req.user,
+      streamer: streamerConfig
+    });
+    
+  } catch (error) {
+    console.error('Get automod settings page error:', error);
+    res.status(500).render('error', { 
+      title: 'Server Error',
+      message: 'An unexpected error occurred.',
+      user: req.user
+    });
+  }
+});
+
+// Get automod stats for a streamer
+router.get('/streamer/:streamerId/automod-stats', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ error: 'Streamer not found or access denied' });
+    }
+    
+    // Get automod stats from the service
+    const stats = req.automodService ? req.automodService.getModerationStats(streamerId) : {
+      totalActions: 0,
+      timeouts: 0,
+      bans: 0
+    };
+    
+    res.json({ 
+      success: true, 
+      stats: stats
+    });
+    
+  } catch (error) {
+    console.error('Get automod stats error:', error);
+    res.status(500).json({ error: 'Failed to get automod stats' });
+  }
+});
+
+// Get automod settings for a streamer (API)
+router.get('/streamer/:streamerId/automod-settings', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ error: 'Streamer not found or access denied' });
+    }
+    
+    // Get automod settings
+    const automodSettings = await req.databaseService.getAutomodSettings(streamerId);
+    
+    res.json({ 
+      success: true, 
+      settings: automodSettings
+    });
+    
+  } catch (error) {
+    console.error('Get automod settings error:', error);
+    res.status(500).json({ error: 'Failed to get automod settings' });
+  }
+});
+
+// Update automod settings for a streamer
+router.post('/streamer/:streamerId/automod-settings', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const { bannedWords, spamDetection, removeSlurs, removeCommonSpam } = req.body;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ error: 'Streamer not found or access denied' });
+    }
+    
+    // Update automod settings
+    const updatedSettings = {
+      bannedWords: bannedWords || [],
+      spamDetection: spamDetection || false,
+      removeSlurs: removeSlurs || false,
+      removeCommonSpam: removeCommonSpam || false
+    };
+    
+    await req.databaseService.updateAutomodSettings(streamerId, updatedSettings);
+    console.log(`🔧 Updated automod settings for streamer ${streamerId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Automod settings updated successfully',
+      settings: updatedSettings
+    });
+    
+  } catch (error) {
+    console.error('Update automod settings error:', error);
+    res.status(500).json({ error: 'Failed to update automod settings' });
+  }
+});
+
+// Generate automod wallet
+router.post('/streamer/:streamerId/generate-automod-wallet', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Streamer not found or access denied.' 
+      });
+    }
+    
+    // Generate automod wallet
+    const result = await req.automodService.generateAutomodWallet(streamerId);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Generate automod wallet error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to generate automod wallet.' 
+    });
+  }
+});
+
+// Summon automod wallet
+router.post('/streamer/:streamerId/summon-automod-wallet', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Streamer not found or access denied.' 
+      });
+    }
+    
+    // Summon automod wallet
+    const result = await req.automodService.summonAutomodWallet(streamerId);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Summon automod wallet error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to summon automod wallet.' 
+    });
+  }
+});
+
+// Get automod wallet status
+router.get('/streamer/:streamerId/automod-wallet-status', async (req, res) => {
+  try {
+    const { streamerId } = req.params;
+    const user = req.user;
+    
+    // Verify user owns this streamer
+    const streamerConfig = await req.databaseService.getStreamerConfig(streamerId);
+    if (!streamerConfig || streamerConfig.user_id !== user.id) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Streamer not found or access denied.' 
+      });
+    }
+    
+    // Get automod wallet status
+    const status = await req.automodService.getAutomodWalletStatus(streamerId);
+    
+    res.json({
+      success: true,
+      ...status
+    });
+    
+  } catch (error) {
+    console.error('Get automod wallet status error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to get automod wallet status.' 
+    });
+  }
+});
+
+// Admin routes for word list management
+router.get('/admin/word-lists', async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user is admin
+    if (!user.is_admin) {
+      return res.status(403).render('error', {
+        title: 'Access Denied',
+        message: 'Admin access required',
+        user: user
+      });
+    }
+    
+    // Get current word lists
+    const slurWords = await req.automodService.getSlurWords();
+    const spamWords = await req.automodService.getSpamWords();
+    
+    res.render('admin/word-lists', {
+      title: 'Word List Management',
+      user: user,
+      slurWords: slurWords,
+      spamWords: spamWords
+    });
+    
+  } catch (error) {
+    console.error('Get word lists error:', error);
+    res.status(500).render('error', {
+      title: 'Server Error',
+      message: 'Failed to load word lists',
+      user: req.user
+    });
+  }
+});
+
+// Update slur words
+router.post('/admin/word-lists/slurs', async (req, res) => {
+  try {
+    const user = req.user;
+    const { words } = req.body;
+    
+    // Check if user is admin
+    if (!user.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Update slur words
+    const result = await req.automodService.updateSlurWords(words);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update slur words error:', error);
+    res.status(500).json({ error: 'Failed to update slur words' });
+  }
+});
+
+// Update spam words
+router.post('/admin/word-lists/spam', async (req, res) => {
+  try {
+    const user = req.user;
+    const { words } = req.body;
+    
+    // Check if user is admin
+    if (!user.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Update spam words
+    const result = await req.automodService.updateSpamWords(words);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update spam words error:', error);
+    res.status(500).json({ error: 'Failed to update spam words' });
   }
 });
 

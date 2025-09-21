@@ -15,6 +15,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PumpChatClient = void 0;
 const websocket_1 = __importDefault(require("websocket"));
 const events_1 = require("events");
+const https = require('https');
+const http = require('http');
 /**
  * Event definitions for PumpChatClient
  * @event PumpChatClient#connected - Emitted when successfully connected to the chat room
@@ -84,11 +86,26 @@ class PumpChatClient extends events_1.EventEmitter {
         this.roomId = options.roomId;
         this.username = options.username || "anonymous";
         this.messageHistoryLimit = options.messageHistoryLimit || 100;
+        this.proxy = options.proxy || null; // Proxy configuration
         // Initialize WebSocket client
         this.client = new websocket_1.default.client();
+        
+        /** Auth cookie string for WS handshake, e.g. "auth_token=..." */
+        this._authCookie = null;
+        
         // Set up WebSocket event handlers
         this.setupClientHandlers();
     }
+    
+    /** Provide an auth cookie for the WS upgrade */
+    setAuthCookie(cookieStr) {
+        this._authCookie = cookieStr || null;
+        console.log(`🔍 [PUMP CHAT CLIENT] Auth cookie set: ${this._authCookie ? 'YES' : 'NO'}`);
+        if (this._authCookie) {
+            console.log(`🔍 [PUMP CHAT CLIENT] Auth cookie value: ${this._authCookie.substring(0, 20)}...`);
+        }
+    }
+    
     /**
      * Sets up event handlers for the WebSocket client.
      * These handlers manage the initial connection establishment.
@@ -139,6 +156,10 @@ class PumpChatClient extends events_1.EventEmitter {
          */
         connection.on("error", (error) => {
             console.error("Connection Error:", error.toString());
+            if (error.toString().includes('429')) {
+                console.log(`🔍 [PUMP CHAT CLIENT] 429 error detected in WebSocket connection`);
+                console.log(`🔍 [PUMP CHAT CLIENT] Error details:`, error.toString());
+            }
             this.emit("error", error);
         });
         /**
@@ -533,11 +554,38 @@ class PumpChatClient extends events_1.EventEmitter {
             "Accept-Language": "en-US,en;q=0.9",
             "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits"
         };
+        
+        // Add auth cookie if available
+        if (this._authCookie) {
+            headers["Cookie"] = this._authCookie;
+            console.log(`🔍 [PUMP CHAT CLIENT] Adding auth cookie to headers: ${this._authCookie.substring(0, 20)}...`);
+            console.log(`🔍 [PUMP CHAT CLIENT] Full cookie being sent: ${this._authCookie}`);
+        } else {
+            console.log(`🔍 [PUMP CHAT CLIENT] No auth cookie available - connecting without authentication`);
+        }
+        
+        // Debug: Log all headers being sent
+        console.log(`🔍 [PUMP CHAT CLIENT] WebSocket headers:`, JSON.stringify(headers, null, 2));
+
+        // Configure proxy if provided
+        let proxyOptions = undefined;
+        if (this.proxy) {
+            const proxyUrl = new URL(`http://${this.proxy}`);
+            proxyOptions = {
+                host: proxyUrl.hostname,
+                port: parseInt(proxyUrl.port) || 8080,
+                auth: proxyUrl.username && proxyUrl.password ? 
+                    `${proxyUrl.username}:${proxyUrl.password}` : undefined
+            };
+            console.log(`🔗 Using proxy: ${proxyUrl.hostname}:${proxyUrl.port}`);
+        }
+
         // Initiate WebSocket connection
         // EIO=4 specifies Engine.IO protocol version 4
         this.client.connect("wss://livechat.pump.fun/socket.io/?EIO=4&transport=websocket", undefined, // No specific protocol
         undefined, // Use default origin
-        headers);
+        headers,
+        proxyOptions);
     }
     /**
      * Disconnects from the chat room.
@@ -608,13 +656,20 @@ class PumpChatClient extends events_1.EventEmitter {
      */
     sendMessage(message) {
         if (this.isConnected) {
+            console.log(`🔍 [PUMP CHAT CLIENT] Sending message: "${message}"`);
+            console.log(`🔍 [PUMP CHAT CLIENT] Room ID: ${this.roomId}`);
+            console.log(`🔍 [PUMP CHAT CLIENT] Username: ${this.username}`);
+            console.log(`🔍 [PUMP CHAT CLIENT] Auth cookie status: ${this._authCookie ? 'SET' : 'NOT SET'}`);
+            
             // Get acknowledgment ID for this request
             const sendAckId = this.getNextAckId();
             // Track pending acknowledgment
             this.pendingAcks.set(sendAckId, { event: "sendMessage", timestamp: Date.now() });
             // Send message with acknowledgment ID
             // Format: 42X["sendMessage",{...}] where X is the ack ID
-            this.send(`42${sendAckId}["sendMessage",{"roomId":"${this.roomId}","message":"${message}","username":"${this.username}"}]`);
+            const messageData = `42${sendAckId}["sendMessage",{"roomId":"${this.roomId}","message":"${message}","username":"${this.username}"}]`;
+            console.log(`🔍 [PUMP CHAT CLIENT] Sending data: ${messageData}`);
+            this.send(messageData);
         }
         else {
             console.error("Cannot send message: not connected");

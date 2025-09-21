@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word List Management - SendKit</title>
+    <link href="/css/style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-dark-bg text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/dashboard" class="text-xl font-bold text-white hover:text-green-400 transition-colors">
+                        ← Back to Dashboard
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400">Welcome, <%= user.username %></span>
+                    <a href="/auth/logout" class="text-gray-400 hover:text-white transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Word List Management</h1>
+            <p class="text-gray-400">Manage automatic word filters for all streamers</p>
+        </div>
+
+        <!-- Slur Words Section -->
+        <div class="card mb-8">
+            <h3 class="text-xl font-semibold text-white mb-4">Slur Words</h3>
+            <div class="space-y-4">
+                <div id="slur-words-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- Slur words will be populated here -->
+                </div>
+                <div class="flex space-x-3">
+                    <input type="text" id="new-slur-word" placeholder="Enter slur word" 
+                           class="flex-1 bg-dark-bg border border-dark-border text-white px-4 py-2 rounded-lg focus:border-green-400 focus:outline-none">
+                    <button type="button" id="add-slur-word" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg transition-colors">
+                        Add Word
+                    </button>
+                </div>
+                <div class="text-sm text-gray-400">
+                    <p>These words will be automatically added to the banned words list when streamers enable "Remove Slurs".</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spam Words Section -->
+        <div class="card mb-8">
+            <h3 class="text-xl font-semibold text-white mb-4">Common Spam Words</h3>
+            <div class="space-y-4">
+                <div id="spam-words-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- Spam words will be populated here -->
+                </div>
+                <div class="flex space-x-3">
+                    <input type="text" id="new-spam-word" placeholder="Enter spam word/phrase" 
+                           class="flex-1 bg-dark-bg border border-dark-border text-white px-4 py-2 rounded-lg focus:border-green-400 focus:outline-none">
+                    <button type="button" id="add-spam-word" class="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg transition-colors">
+                        Add Word
+                    </button>
+                </div>
+                <div class="text-sm text-gray-400">
+                    <p>These words/phrases will be automatically added to the banned words list when streamers enable "Remove Common Spam".</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex space-x-4">
+            <button type="button" id="cancel-changes" class="bg-gray-600 hover:bg-gray-500 text-white px-8 py-3 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button type="button" id="save-changes" class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg transition-colors">
+                Save Changes
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let slurWords = [];
+        let spamWords = [];
+
+        // Load current word lists when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadWordLists();
+        });
+
+        // Load word lists from server
+        function loadWordLists() {
+            slurWords = <%- JSON.stringify(slurWords) %>;
+            spamWords = <%- JSON.stringify(spamWords) %>;
+            
+            renderSlurWords();
+            renderSpamWords();
+        }
+
+        // Render slur words
+        function renderSlurWords() {
+            const container = document.getElementById('slur-words-list');
+            container.innerHTML = '';
+            
+            slurWords.forEach((word, index) => {
+                const wordElement = document.createElement('div');
+                wordElement.className = 'flex items-center justify-between bg-dark-bg border border-dark-border rounded-lg px-4 py-2';
+                wordElement.innerHTML = `
+                    <span class="text-white">${word}</span>
+                    <button type="button" class="text-red-400 hover:text-red-300 transition-colors remove-slur-word" data-index="${index}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                `;
+                container.appendChild(wordElement);
+            });
+        }
+
+        // Render spam words
+        function renderSpamWords() {
+            const container = document.getElementById('spam-words-list');
+            container.innerHTML = '';
+            
+            spamWords.forEach((word, index) => {
+                const wordElement = document.createElement('div');
+                wordElement.className = 'flex items-center justify-between bg-dark-bg border border-dark-border rounded-lg px-4 py-2';
+                wordElement.innerHTML = `
+                    <span class="text-white">${word}</span>
+                    <button type="button" class="text-red-400 hover:text-red-300 transition-colors remove-spam-word" data-index="${index}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                `;
+                container.appendChild(wordElement);
+            });
+        }
+
+        // Add slur word
+        document.getElementById('add-slur-word').addEventListener('click', function() {
+            const input = document.getElementById('new-slur-word');
+            const word = input.value.trim().toLowerCase();
+            
+            if (word && !slurWords.includes(word)) {
+                slurWords.push(word);
+                renderSlurWords();
+                input.value = '';
+            }
+        });
+
+        // Add spam word
+        document.getElementById('add-spam-word').addEventListener('click', function() {
+            const input = document.getElementById('new-spam-word');
+            const word = input.value.trim().toLowerCase();
+            
+            if (word && !spamWords.includes(word)) {
+                spamWords.push(word);
+                renderSpamWords();
+                input.value = '';
+            }
+        });
+
+        // Remove words
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-slur-word')) {
+                const index = parseInt(e.target.closest('.remove-slur-word').dataset.index);
+                slurWords.splice(index, 1);
+                renderSlurWords();
+            }
+            
+            if (e.target.closest('.remove-spam-word')) {
+                const index = parseInt(e.target.closest('.remove-spam-word').dataset.index);
+                spamWords.splice(index, 1);
+                renderSpamWords();
+            }
+        });
+
+        // Save changes
+        document.getElementById('save-changes').addEventListener('click', async function() {
+            try {
+                const button = this;
+                const originalText = button.textContent;
+                
+                button.disabled = true;
+                button.textContent = 'Saving...';
+                
+                // Save slur words
+                const slurResponse = await fetch('/dashboard/admin/word-lists/slurs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ words: slurWords })
+                });
+                
+                // Save spam words
+                const spamResponse = await fetch('/dashboard/admin/word-lists/spam', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ words: spamWords })
+                });
+                
+                const slurResult = await slurResponse.json();
+                const spamResult = await spamResponse.json();
+                
+                if (slurResult.success && spamResult.success) {
+                    showNotification('Word lists updated successfully!', 'success');
+                } else {
+                    showNotification('Error updating word lists: ' + (slurResult.error || spamResult.error), 'error');
+                }
+            } catch (error) {
+                console.error('Error saving word lists:', error);
+                showNotification('Error saving word lists. Please try again.', 'error');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Save Changes';
+            }
+        });
+
+        // Cancel changes
+        document.getElementById('cancel-changes').addEventListener('click', function() {
+            window.location.href = '/dashboard';
+        });
+
+        // Show notification
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-red-900/20 border-red-500 text-red-400';
+            notification.className = `fixed top-4 right-4 z-50 ${bgColor} border px-4 py-2 rounded-lg text-sm max-w-md`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -7,8 +7,8 @@ class WalletMonitor extends EventEmitter {
     
     // Use multiple RPC endpoints for better reliability
     this.rpcEndpoints = [
-      process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
       'https://mainnet.helius-rpc.com/?api-key=1c17dfcf-e870-42b1-af2c-b834175b0adc',
+      process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
       'https://solana-api.projectserum.com'
     ];
     this.currentRpcIndex = 0;
@@ -19,7 +19,9 @@ class WalletMonitor extends EventEmitter {
     
     this.monitoredWallets = new Map();
     this.monitoringInterval = null;
-    this.checkInterval = 10000; // Check every 10 seconds (only checking most recent transaction)
+    this.checkInterval = 15000; // Check every 15 seconds per wallet
+    this.requestDelay = 3000; // 3 seconds between requests
+    this.lastRequestTime = 0;
   }
 
   // Start monitoring a wallet for incoming SOL donations
@@ -95,8 +97,17 @@ class WalletMonitor extends EventEmitter {
         continue;
       }
       
+      // Add delay between requests to avoid rate limiting
+      const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+      if (timeSinceLastRequest < this.requestDelay) {
+        const delayNeeded = this.requestDelay - timeSinceLastRequest;
+        console.log(`⏳ [WALLET MONITOR] Waiting ${delayNeeded}ms before next request to avoid rate limiting`);
+        await new Promise(resolve => setTimeout(resolve, delayNeeded));
+      }
+      
       try {
         await this.checkWalletTransactions(walletAddress, walletData);
+        this.lastRequestTime = Date.now();
       } catch (error) {
         console.error(`❌ [WALLET MONITOR] Error checking wallet ${walletAddress}:`, error);
       }
@@ -181,9 +192,17 @@ class WalletMonitor extends EventEmitter {
         return;
       }
       
-      // Handle rate limiting gracefully
+      // Handle rate limiting gracefully with exponential backoff
       if (error.message && error.message.includes('429')) {
-        console.log(`⚠️ Rate limited for wallet ${walletAddress}, will retry later`);
+        console.log(`⚠️ [WALLET MONITOR] Rate limited for wallet ${walletAddress}, will retry later`);
+        console.log(`🔍 [WALLET MONITOR] Error details:`, error.message);
+        
+        // Implement exponential backoff
+        walletData.retryCount = (walletData.retryCount || 0) + 1;
+        const backoffDelay = Math.min(300000, 30000 * Math.pow(2, walletData.retryCount - 1)); // Max 5 minutes
+        walletData.nextRetryTime = Date.now() + backoffDelay;
+        
+        console.log(`⏰ [WALLET MONITOR] Backing off for ${backoffDelay}ms (attempt ${walletData.retryCount})`);
         return;
       }
       
@@ -304,9 +323,13 @@ class WalletMonitor extends EventEmitter {
         return;
       }
       
-      // Handle rate limiting gracefully
+      // Handle rate limiting gracefully with exponential backoff
       if (error.message && error.message.includes('429')) {
-        console.log(`⚠️ Rate limited processing transaction ${signature}, will retry later`);
+        console.log(`⚠️ [WALLET MONITOR] Rate limited processing transaction ${signature}, will retry later`);
+        console.log(`🔍 [WALLET MONITOR] Transaction error details:`, error.message);
+        
+        // Switch to next RPC endpoint on rate limiting
+        this.switchToNextRpc();
         return;
       }
       console.error(`❌ [WALLET MONITOR] Error processing transaction ${signature}:`, error);

@@ -34,9 +34,10 @@ class IntegratedPollService {
   }
 
   // Set database service and load streamers
-  async setDatabaseServiceAndLoadStreamers(databaseService) {
+  async setDatabaseServiceAndLoadStreamers(databaseService, chatMonitorManager) {
     try {
       this.databaseService = databaseService;
+      this.chatMonitorManager = chatMonitorManager;
       
       // Get all streamers from database
       const streamers = await databaseService.getAllStreamerConfigs();
@@ -116,24 +117,23 @@ class IntegratedPollService {
       // Create poll manager for this streamer
       const pollManager = new PollManager(streamerId);
       
-      // Create chat client for this streamer
-      const chatClient = new PumpChatClient({
-        roomId: tokenAddress,
-        username: `poll_bot_${String(streamerId).substring(0, 8)}`,
-        messageHistoryLimit: 50
-      });
-      
       // Set up whitelist
       const whitelistSet = new Set(whitelist);
       
       // Store streamer instance
       this.streamers.set(streamerId, {
         pollManager,
-        chatClient,
         whitelist: whitelistSet,
         config,
         isActive: false
       });
+      
+      // Subscribe to shared chat monitor
+      if (this.chatMonitorManager) {
+        await this.chatMonitorManager.subscribe(streamerId, tokenAddress, 'Poll', (message) => {
+          this.handleChatMessage(streamerId, message);
+        });
+      }
       
       // Set up event handlers
       this.setupStreamerEventHandlers(streamerId);
@@ -151,76 +151,8 @@ class IntegratedPollService {
     const streamer = this.streamers.get(streamerId);
     if (!streamer) return;
 
-    const { pollManager, chatClient, whitelist } = streamer;
-
-    // Chat message handler
-    chatClient.on('message', async (msg) => {
-      try {
-        const sender = msg?.username || '';
-        const text = (msg?.message || '').trim();
-        if (!sender || !text) return;
-
-        console.log(`💬 [${streamerId}] Chat (${streamer.config.tokenAddress}): ${sender}: ${text}`);
-
-        // Whitelist management
-        if (text.startsWith('/whitelist')) {
-          await this.handleWhitelistCommand(streamerId, sender, text);
-          return;
-        }
-
-        // Poll creation (privileged)
-        if (text.startsWith('/poll')) {
-          if (!this.isSenderPrivileged(streamerId, sender)) {
-            console.log(`❌ [${streamerId}] ${sender} not privileged, ignoring /poll`);
-            return;
-          }
-          const parsed = this.parsePollCommand(text);
-          if (!parsed) {
-            this.sendChat(streamerId, `Usage: /poll "Question" 1:OptA 2:OptB [seconds]`);
-            return;
-          }
-          if (pollManager.isActive()) {
-            this.sendChat(streamerId, `⚠️ A poll is already running.`);
-            return;
-          }
-          
-          await this.createPoll(streamerId, {
-            question: parsed.question,
-            options: parsed.options,
-            duration: parsed.duration
-          });
-          const pretty = Object.keys(parsed.options).map(n => `${n}:${parsed.options[n]}`).join('  ');
-          this.sendChat(streamerId, `📊 Poll started: "${parsed.question}" — vote by typing the number! (${pretty}) Ends in ${parsed.duration}s`);
-          return;
-        }
-
-        // Public voting
-        this.handleViewerVote(streamerId, sender, text);
-
-        // End announcement
-        if (pollManager.current && pollManager.current.closed && !pollManager.current._announced) {
-          pollManager.current._announced = true;
-          const winner = pollManager.winner();
-          this.sendChat(streamerId, winner ? `🏁 Poll ended! Winner: ${winner.num} — ${winner.label} (${winner.count} votes)` : `🏁 Poll ended! No votes.`);
-        }
-      } catch (e) {
-        console.log(`Message handler error for ${streamerId}:`, e);
-      }
-    });
-
-    chatClient.on('connect', () => {
-      console.log(`✅ [${streamerId}] Connected to pump.fun chat for token: ${streamer.config.tokenAddress}`);
-      streamer.isActive = true;
-    });
-
-    chatClient.on('disconnect', () => {
-      console.log(`🔌 [${streamerId}] Disconnected from pump.fun chat`);
-      streamer.isActive = false;
-    });
-
-    chatClient.on('error', (e) => {
-      console.log(`❌ [${streamerId}] Pump chat error:`, e?.message || e);
-    });
+    // Chat message handler is now handled by shared chat monitor
+    // This method is kept for other event handlers if needed
   }
 
   // Start chat connection for a streamer
@@ -232,7 +164,8 @@ class IntegratedPollService {
 
     try {
       console.log(`🔗 [${streamerId}] Connecting to Pump.fun chat for token: ${streamer.config.tokenAddress}`);
-      await streamer.chatClient.connect(streamer.config.tokenAddress);
+      // Chat connection is now handled by shared chat monitor
+      streamer.isActive = true;
       console.log(`🚀 [${streamerId}] Poll service started for token: ${streamer.config.tokenAddress}`);
     } catch (error) {
       console.error(`Error starting poll service for ${streamerId} (token: ${streamer.config.tokenAddress}):`, error);
@@ -246,7 +179,10 @@ class IntegratedPollService {
     if (!streamer) return;
 
     try {
-      await streamer.chatClient.disconnect();
+      // Unsubscribe from shared chat monitor
+      if (this.chatMonitorManager) {
+        this.chatMonitorManager.unsubscribe(streamerId, 'Poll');
+      }
       streamer.isActive = false;
       console.log(`🛑 [${streamerId}] Poll service stopped`);
     } catch (error) {
@@ -1019,7 +955,7 @@ class IntegratedPollService {
       const text = (msg?.message || '').trim();
       if (!sender || !text) return;
 
-      console.log(`💬 Chat: ${sender}: ${text} (streamer: ${streamerId})`);
+      // console.log(`💬 Chat: ${sender}: ${text} (streamer: ${streamerId})`);
 
       // Whitelist management
       if (text.startsWith('/whitelist')) {

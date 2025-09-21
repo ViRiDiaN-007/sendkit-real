@@ -27,6 +27,7 @@ const IntegratedTTSService = require('./src/services/IntegratedTTSService');
 const PollService = require('./src/services/PollService');
 const IntegratedPollService = require('./src/services/IntegratedPollService');
 const AutomodService = require('./src/services/AutomodService');
+const ChatMonitorManager = require('./src/services/ChatMonitorManager');
 
 class SendKitApp {
   constructor() {
@@ -45,6 +46,7 @@ class SendKitApp {
     
     // Initialize services
     this.databaseService = new DatabaseService();
+    this.chatMonitorManager = new ChatMonitorManager();
     this.ttsService = new TTSService();
     this.integratedTTSService = new IntegratedTTSService();
     this.pollService = new PollService();
@@ -70,14 +72,18 @@ class SendKitApp {
       await this.integratedPollService.initialize();
       await this.automodService.initialize();
       
+      // Set up automod service
+      this.automodService.setSocketIO(this.io);
+      await this.automodService.setDatabaseServiceAndLoadStreamers(this.databaseService, this.chatMonitorManager);
+      
       // Set Socket.IO instance for IntegratedPollService
       this.integratedPollService.setSocketIO(this.io);
       
       // Load existing streamers and start their poll bots
-      await this.integratedPollService.setDatabaseServiceAndLoadStreamers(this.databaseService);
+      await this.integratedPollService.setDatabaseServiceAndLoadStreamers(this.databaseService, this.chatMonitorManager);
       
       // Load existing streamers and start their TTS services
-      await this.integratedTTSService.setDatabaseServiceAndLoadStreamers(this.databaseService);
+      await this.integratedTTSService.setDatabaseServiceAndLoadStreamers(this.databaseService, this.chatMonitorManager);
       
       console.log('✅ All services initialized');
     } catch (error) {
@@ -150,6 +156,7 @@ class SendKitApp {
     // Make services available to routes
     this.app.use((req, res, next) => {
       req.databaseService = this.databaseService;
+      req.chatMonitorManager = this.chatMonitorManager;
       req.ttsService = this.ttsService;
       req.integratedTTSService = this.integratedTTSService;
       req.pollService = this.pollService;
@@ -261,8 +268,26 @@ class SendKitApp {
       });
     });
 
+    // Global error handler for 429 errors
+    process.on('uncaughtException', (error) => {
+      if (error.message && error.message.includes('429')) {
+        console.log(`🔍 [GLOBAL] 429 error detected:`, error.message);
+        console.log(`🔍 [GLOBAL] Stack trace:`, error.stack);
+      }
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      if (reason && reason.message && reason.message.includes('429')) {
+        console.log(`🔍 [GLOBAL] 429 rejection detected:`, reason.message);
+        console.log(`🔍 [GLOBAL] Promise:`, promise);
+      }
+    });
+
     // Error handler
     this.app.use((err, req, res, next) => {
+      if (err.message && err.message.includes('429')) {
+        console.log(`🔍 [EXPRESS] 429 error in route ${req.path}:`, err.message);
+      }
       console.error('Error:', err);
       res.status(500).render('error', { 
         title: 'Server Error',

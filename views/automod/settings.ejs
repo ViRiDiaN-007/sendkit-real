@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automod Settings - SendKit</title>
+    <link href="/css/style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-dark-bg text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-dark-card border-b border-dark-border">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/dashboard" class="text-xl font-bold text-white hover:text-green-400 transition-colors">
+                        ← Back to Dashboard
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-400">Welcome, <%= user.username %></span>
+                    <a href="/auth/logout" class="text-gray-400 hover:text-white transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Automod Settings</h1>
+            <p class="text-gray-400">Configure chat moderation for <%= streamer.username || 'Unnamed Streamer' %></p>
+        </div>
+
+        <!-- Automod Wallet Section -->
+        <div class="card mb-8">
+            <h3 class="text-xl font-semibold text-white mb-4">Automod Wallet</h3>
+            <div class="space-y-4">
+                <div id="wallet-status" class="p-4 bg-dark-bg border border-dark-border rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-white font-medium">Wallet Status</div>
+                            <div id="wallet-address" class="text-gray-400 text-sm">No wallet generated</div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button id="generate-wallet-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors">
+                                Generate Wallet
+                            </button>
+                            <button id="summon-wallet-btn" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition-colors" disabled>
+                                Summon Wallet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-sm text-gray-400">
+                    <p>Generate a persistent wallet for this streamer's automod bot. The wallet will be stored securely and can be summoned to join the chat.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Form -->
+        <div class="card">
+            <form id="automod-settings-form" data-streamer-id="<%= streamer.streamer_id %>">
+                <!-- Banned Words Section -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-white mb-4">Banned Words</h3>
+                    <div class="space-y-4">
+                        <div id="banned-words-list" class="space-y-2">
+                            <!-- Banned words will be populated here -->
+                        </div>
+                        <div class="flex space-x-3">
+                            <input type="text" id="new-banned-word" placeholder="Enter banned word" 
+                                   class="flex-1 bg-dark-bg border border-dark-border text-white px-4 py-2 rounded-lg focus:border-green-400 focus:outline-none">
+                            <button type="button" id="add-banned-word" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg transition-colors">
+                                Add Word
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detection Settings -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-white mb-4">Detection Settings</h3>
+                    <div class="space-y-6">
+                        <!-- Spam Detection -->
+                        <div class="flex items-start space-x-4">
+                            <input type="checkbox" id="spam-detection" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1" checked>
+                            <div>
+                                <label for="spam-detection" class="text-lg font-medium text-white">Enable Spam Detection</label>
+                                <p class="text-gray-400 mt-1">Automatically detect and moderate spam messages</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automatic Word Filters -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-white mb-4">Automatic Word Filters</h3>
+                    <div class="space-y-6">
+                        <!-- Remove Slurs -->
+                        <div class="flex items-start space-x-4">
+                            <input type="checkbox" id="remove-slurs" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
+                            <div>
+                                <label for="remove-slurs" class="text-lg font-medium text-white">Remove Slurs</label>
+                                <p class="text-gray-400 mt-1">Automatically add common slurs to the banned words list</p>
+                            </div>
+                        </div>
+
+                        <!-- Remove Common Spam -->
+                        <div class="flex items-start space-x-4">
+                            <input type="checkbox" id="remove-common-spam" class="w-5 h-5 text-green-600 bg-dark-bg border-dark-border rounded focus:ring-green-500 focus:ring-2 mt-1">
+                            <div>
+                                <label for="remove-common-spam" class="text-lg font-medium text-white">Remove Common Spam</label>
+                                <p class="text-gray-400 mt-1">Automatically add common spam words to the banned words list</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Moderation Settings -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-white mb-4">Moderation Settings</h3>
+                    <div class="space-y-6">
+                        <div class="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                                <div>
+                                    <div class="text-yellow-400 font-medium">Ban-Only Mode</div>
+                                    <p class="text-yellow-200 text-sm mt-1">Users who violate the rules will be banned immediately. No timeouts are issued.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-4">
+                    <button type="button" id="cancel-settings" class="bg-gray-600 hover:bg-gray-500 text-white px-8 py-3 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg transition-colors">
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="mt-8">
+            <h3 class="text-xl font-semibold text-white mb-4">Moderation Statistics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-green-400 mb-2" id="total-actions">0</div>
+                    <div class="text-gray-400">Total Actions</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-yellow-400 mb-2" id="total-timeouts">0</div>
+                    <div class="text-gray-400">Timeouts</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-red-400 mb-2" id="total-bans">0</div>
+                    <div class="text-gray-400">Bans</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load current settings when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAutomodSettings();
+            loadModerationStats();
+            loadWalletStatus();
+        });
+
+        // Load automod settings
+        async function loadAutomodSettings() {
+            try {
+                const streamerId = document.getElementById('automod-settings-form').dataset.streamerId;
+                const response = await fetch(`/dashboard/streamer/${streamerId}/automod-settings`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const settings = data.settings;
+                    
+                    // Load banned words
+                    const bannedWordsList = document.getElementById('banned-words-list');
+                    bannedWordsList.innerHTML = '';
+                    if (settings.bannedWords && settings.bannedWords.length > 0) {
+                        settings.bannedWords.forEach(word => {
+                            addBannedWordToList(word);
+                        });
+                    }
+                    
+                    // Load checkboxes
+                    document.getElementById('spam-detection').checked = settings.spamDetection || true;
+                    document.getElementById('remove-slurs').checked = settings.removeSlurs || false;
+                    document.getElementById('remove-common-spam').checked = settings.removeCommonSpam || false;
+                }
+            } catch (error) {
+                console.error('Error loading automod settings:', error);
+            }
+        }
+
+        // Load moderation stats
+        async function loadModerationStats() {
+            try {
+                const streamerId = document.getElementById('automod-settings-form').dataset.streamerId;
+                const response = await fetch(`/dashboard/streamer/${streamerId}/automod-stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('total-actions').textContent = data.stats.totalActions || 0;
+                    document.getElementById('total-timeouts').textContent = data.stats.timeouts || 0;
+                    document.getElementById('total-bans').textContent = data.stats.bans || 0;
+                }
+            } catch (error) {
+                console.error('Error loading moderation stats:', error);
+            }
+        }
+
+        // Add banned word to list
+        function addBannedWordToList(word) {
+            const bannedWordsList = document.getElementById('banned-words-list');
+            const wordElement = document.createElement('div');
+            wordElement.className = 'flex items-center justify-between bg-dark-bg border border-dark-border rounded-lg px-4 py-2';
+            wordElement.innerHTML = `
+                <span class="text-white">${word}</span>
+                <button type="button" class="text-red-400 hover:text-red-300 transition-colors remove-banned-word" data-word="${word}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            `;
+            bannedWordsList.appendChild(wordElement);
+        }
+
+        // Add banned word
+        document.getElementById('add-banned-word').addEventListener('click', function() {
+            const input = document.getElementById('new-banned-word');
+            const word = input.value.trim();
+            
+            if (word) {
+                addBannedWordToList(word);
+                input.value = '';
+            }
+        });
+
+        // Remove banned word
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-banned-word')) {
+                e.target.closest('.flex').remove();
+            }
+        });
+
+        // Save settings
+        document.getElementById('automod-settings-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const streamerId = this.dataset.streamerId;
+                const bannedWords = Array.from(document.querySelectorAll('#banned-words-list .flex span')).map(span => span.textContent);
+                const spamDetection = document.getElementById('spam-detection').checked;
+                const removeSlurs = document.getElementById('remove-slurs').checked;
+                const removeCommonSpam = document.getElementById('remove-common-spam').checked;
+                
+                const response = await fetch(`/dashboard/streamer/${streamerId}/automod-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        bannedWords,
+                        spamDetection,
+                        removeSlurs,
+                        removeCommonSpam
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Automod settings saved successfully!', 'success');
+                    loadModerationStats(); // Refresh stats
+                } else {
+                    showNotification('Error saving settings: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error saving automod settings:', error);
+                showNotification('Error saving settings. Please try again.', 'error');
+            }
+        });
+
+        // Load wallet status
+        async function loadWalletStatus() {
+            try {
+                const streamerId = document.getElementById('automod-settings-form').dataset.streamerId;
+                const response = await fetch(`/dashboard/streamer/${streamerId}/automod-settings`);
+                const data = await response.json();
+                
+                if (data.success && data.settings.automodWalletAddress) {
+                    document.getElementById('wallet-address').textContent = data.settings.automodWalletAddress;
+                    document.getElementById('generate-wallet-btn').textContent = 'Regenerate Wallet';
+                    document.getElementById('summon-wallet-btn').disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading wallet status:', error);
+            }
+        }
+
+        // Generate wallet
+        document.getElementById('generate-wallet-btn').addEventListener('click', async function() {
+            try {
+                const streamerId = document.getElementById('automod-settings-form').dataset.streamerId;
+                const button = this;
+                const originalText = button.textContent;
+                
+                button.disabled = true;
+                button.textContent = 'Generating...';
+                
+                const response = await fetch(`/dashboard/streamer/${streamerId}/generate-automod-wallet`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('wallet-address').textContent = data.walletAddress;
+                    document.getElementById('summon-wallet-btn').disabled = false;
+                    button.textContent = 'Regenerate Wallet';
+                    showNotification('Automod wallet generated successfully!', 'success');
+                } else {
+                    showNotification('Error generating wallet: ' + (data.error || 'Unknown error'), 'error');
+                    button.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Error generating wallet:', error);
+                showNotification('Error generating wallet. Please try again.', 'error');
+                this.textContent = 'Generate Wallet';
+            } finally {
+                this.disabled = false;
+            }
+        });
+
+        // Summon wallet
+        document.getElementById('summon-wallet-btn').addEventListener('click', async function() {
+            try {
+                const streamerId = document.getElementById('automod-settings-form').dataset.streamerId;
+                const button = this;
+                const originalText = button.textContent;
+                
+                button.disabled = true;
+                button.textContent = 'Summoning...';
+                
+                const response = await fetch(`/dashboard/streamer/${streamerId}/summon-automod-wallet`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Automod wallet summoned to chat! It will announce "Its me!" in the chat.', 'success');
+                } else {
+                    showNotification('Error summoning wallet: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error summoning wallet:', error);
+                showNotification('Error summoning wallet. Please try again.', 'error');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Summon Wallet';
+            }
+        });
+
+        // Show notification
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-900/20 border-green-500 text-green-400' : 'bg-red-900/20 border-red-500 text-red-400';
+            notification.className = `fixed top-4 right-4 z-50 ${bgColor} border px-4 py-2 rounded-lg text-sm max-w-md`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Cancel button
+        document.getElementById('cancel-settings').addEventListener('click', function() {
+            window.location.href = '/dashboard';
+        });
+    </script>
+</body>
+</html>

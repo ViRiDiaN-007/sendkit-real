@@ -12,9 +12,11 @@
     "build:css:watch": "tailwindcss -i ./src/css/input.css -o ./public/css/style.css --watch"
   },
   "dependencies": {
+    "@scure/base": "^2.0.0",
     "@solana/web3.js": "^1.98.4",
     "axios": "^1.5.0",
     "bcryptjs": "^2.4.3",
+    "bs58": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ejs": "^3.1.10",
@@ -31,6 +33,7 @@
     "pump-chat-client": "^1.0.1",
     "socket.io": "^4.7.2",
     "sqlite3": "^5.1.7",
+    "tweetnacl": "^1.0.3",
     "uuid": "^9.0.0",
     "websocket": "^1.0.35",
     "ws": "^8.13.0"

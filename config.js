@@ -33,3 +33,4 @@ module.exports = {
     password: process.env.ADMIN_PASSWORD || 'admin123'
   }
 };
+

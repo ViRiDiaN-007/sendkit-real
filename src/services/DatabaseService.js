@@ -7,7 +7,7 @@ class DatabaseService {
   constructor() {
     this.pool = null;
     this.db = null;
-    this.dbType = process.env.DB_TYPE || 'sqlite';
+    this.dbType = process.env.DB_TYPE || 'postgresql';
     
     if (this.dbType === 'postgresql') {
       this.pool = new Pool({
@@ -21,7 +21,7 @@ class DatabaseService {
         connectionTimeoutMillis: 2000,
       });
     } else if (this.dbType === 'sqlite') {
-      const dbPath = path.join(__dirname, '../../data/sendkit.db');
+      const dbPath = process.env.DB_PATH || './data/sendkit.db';
       this.db = new sqlite3.Database(dbPath);
     }
   }
@@ -48,8 +48,10 @@ class DatabaseService {
   }
 
   async createTables() {
+    let queries;
+    
     if (this.dbType === 'postgresql') {
-      const queries = [
+      queries = [
         `CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           email VARCHAR(255) UNIQUE NOT NULL,
@@ -68,6 +70,9 @@ class DatabaseService {
           username VARCHAR(255),
           wallet_address VARCHAR(255) NOT NULL,
           token_address VARCHAR(255),
+          tts_settings JSONB,
+          poll_settings JSONB,
+          automod_settings JSONB,
           is_active BOOLEAN DEFAULT TRUE,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -76,20 +81,22 @@ class DatabaseService {
         `CREATE TABLE IF NOT EXISTS tts_messages (
           id SERIAL PRIMARY KEY,
           streamer_id VARCHAR(255) NOT NULL,
-          message_text TEXT NOT NULL,
-          sender VARCHAR(255) NOT NULL,
-          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          message_type VARCHAR(50) DEFAULT 'regular',
-          amount DECIMAL(18,8) DEFAULT 0,
+          message TEXT NOT NULL,
+          username VARCHAR(255),
+          amount DECIMAL(18,8),
+          token_address VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS admin_settings (
+          id SERIAL PRIMARY KEY,
+          key VARCHAR(255) UNIQUE NOT NULL,
+          value TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
       ];
-
-      for (const query of queries) {
-        await this.query(query);
-      }
     } else if (this.dbType === 'sqlite') {
-      const queries = [
+      queries = [
         `CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
@@ -108,6 +115,9 @@ class DatabaseService {
           username TEXT,
           wallet_address TEXT NOT NULL,
           token_address TEXT,
+          tts_settings TEXT,
+          poll_settings TEXT,
+          automod_settings TEXT,
           is_active BOOLEAN DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -116,17 +126,64 @@ class DatabaseService {
         `CREATE TABLE IF NOT EXISTS tts_messages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           streamer_id TEXT NOT NULL,
-          message_text TEXT NOT NULL,
-          sender TEXT NOT NULL,
-          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-          message_type TEXT DEFAULT 'regular',
-          amount REAL DEFAULT 0,
+          message TEXT NOT NULL,
+          username TEXT,
+          amount REAL,
+          token_address TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS admin_settings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT UNIQUE NOT NULL,
+          value TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`
       ];
+    }
 
-      for (const query of queries) {
-        await this.query(query);
+    for (const query of queries) {
+      await this.query(query);
+    }
+
+    // Run migrations for existing databases
+    await this.runMigrations();
+  }
+
+  async runMigrations() {
+    if (this.dbType === 'sqlite') {
+      try {
+        // Check if tts_settings column exists
+        const checkTtsSettings = await this.query("PRAGMA table_info(streamer_configs)");
+        const hasTtsSettings = checkTtsSettings.rows.some(col => col.name === 'tts_settings');
+        
+        if (!hasTtsSettings) {
+          console.log('🔄 Adding tts_settings column to streamer_configs table...');
+          await this.query("ALTER TABLE streamer_configs ADD COLUMN tts_settings TEXT");
+        }
+
+        // Check if poll_settings column exists
+        const checkPollSettings = await this.query("PRAGMA table_info(streamer_configs)");
+        const hasPollSettings = checkPollSettings.rows.some(col => col.name === 'poll_settings');
+        
+        if (!hasPollSettings) {
+          console.log('🔄 Adding poll_settings column to streamer_configs table...');
+          await this.query("ALTER TABLE streamer_configs ADD COLUMN poll_settings TEXT");
+        }
+
+        // Check if automod_settings column exists
+        const checkAutomodSettings = await this.query("PRAGMA table_info(streamer_configs)");
+        const hasAutomodSettings = checkAutomodSettings.rows.some(col => col.name === 'automod_settings');
+        
+        if (!hasAutomodSettings) {
+          console.log('🔄 Adding automod_settings column to streamer_configs table...');
+          await this.query("ALTER TABLE streamer_configs ADD COLUMN automod_settings TEXT");
+        }
+
+        console.log('✅ Database migrations completed');
+      } catch (error) {
+        console.error('❌ Migration failed:', error);
+        throw error;
       }
     }
   }
@@ -188,54 +245,26 @@ class DatabaseService {
     } else if (this.dbType === 'sqlite') {
       const query = `INSERT INTO users (email, password, username, wallet_address, streamer_id, is_admin) VALUES (?, ?, ?, ?, ?, ?)`;
       await this.query(query, [email, password, username, wallet_address, streamer_id, is_admin]);
-      
-      // Get the inserted user
-      const selectQuery = `SELECT * FROM users WHERE email = ?`;
-      const result = await this.query(selectQuery, [email]);
+      // Get the last inserted row
+      const result = await this.query('SELECT * FROM users WHERE id = last_insert_rowid()');
       return result.rows[0];
     }
   }
 
   async findUserByEmail(email) {
-    if (this.dbType === 'postgresql') {
-      const query = 'SELECT * FROM users WHERE email = $1';
-      const result = await this.query(query, [email]);
-      return result.rows[0];
-    } else if (this.dbType === 'sqlite') {
-      const query = 'SELECT * FROM users WHERE email = ?';
-      const result = await this.query(query, [email]);
-      return result.rows[0];
-    }
+    const query = this.dbType === 'postgresql' ? 'SELECT * FROM users WHERE email = $1' : 'SELECT * FROM users WHERE email = ?';
+    const result = await this.query(query, [email]);
+    return result.rows[0];
   }
 
   async findUserById(id) {
-    if (this.dbType === 'postgresql') {
-      const query = 'SELECT * FROM users WHERE id = $1';
-      const result = await this.query(query, [id]);
-      return result.rows[0];
-    } else if (this.dbType === 'sqlite') {
-      const query = 'SELECT * FROM users WHERE id = ?';
-      const result = await this.query(query, [id]);
-      return result.rows[0];
-    }
-  }
-
-  async findUserByUsername(username) {
-    if (this.dbType === 'postgresql') {
-      const query = 'SELECT * FROM users WHERE username = $1';
-      const result = await this.query(query, [username]);
-      return result.rows[0];
-    } else if (this.dbType === 'sqlite') {
-      const query = 'SELECT * FROM users WHERE username = ?';
-      const result = await this.query(query, [username]);
-      return result.rows[0];
-    }
+    const query = this.dbType === 'postgresql' ? 'SELECT * FROM users WHERE id = $1' : 'SELECT * FROM users WHERE id = ?';
+    const result = await this.query(query, [id]);
+    return result.rows[0];
   }
 
   async getStreamers() {
-    const query = this.dbType === 'postgresql' 
-      ? 'SELECT * FROM streamer_configs WHERE is_active = TRUE'
-      : 'SELECT * FROM streamer_configs WHERE is_active = 1';
+    const query = 'SELECT * FROM streamer_configs WHERE is_active = TRUE';
     const result = await this.query(query);
     return result.rows;
   }
@@ -244,45 +273,91 @@ class DatabaseService {
     return this.getStreamers();
   }
 
+  async getStreamerConfig(streamerId) {
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT * FROM streamer_configs WHERE streamer_id = $1' : 
+      'SELECT * FROM streamer_configs WHERE streamer_id = ?';
+    const result = await this.query(query, [streamerId]);
+    return result.rows[0];
+  }
+
   async getStreamerConfigsByUserId(userId) {
-    if (this.dbType === 'postgresql') {
-      const query = 'SELECT * FROM streamer_configs WHERE user_id = $1';
-      const result = await this.query(query, [userId]);
-      return result.rows;
-    } else if (this.dbType === 'sqlite') {
-      const query = 'SELECT * FROM streamer_configs WHERE user_id = ?';
-      const result = await this.query(query, [userId]);
-      return result.rows;
-    }
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT * FROM streamer_configs WHERE user_id = $1' : 
+      'SELECT * FROM streamer_configs WHERE user_id = ?';
+    const result = await this.query(query, [userId]);
+    return result.rows;
   }
 
   async getTTSSettings(streamerId) {
-    // Placeholder - return default settings for now
-    return {
-      enabled: false,
-      voice: 'en-US-AriaNeural',
-      rate: 1.0,
-      pitch: 1.0
-    };
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT tts_settings FROM streamer_configs WHERE streamer_id = $1' : 
+      'SELECT tts_settings FROM streamer_configs WHERE streamer_id = ?';
+    const result = await this.query(query, [streamerId]);
+    if (result.rows[0] && result.rows[0].tts_settings) {
+      return typeof result.rows[0].tts_settings === 'string' ? 
+        JSON.parse(result.rows[0].tts_settings) : 
+        result.rows[0].tts_settings;
+    }
+    return null;
+  }
+
+  async updateTTSSettings(streamerId, settings) {
+    const settingsJson = JSON.stringify(settings);
+    const query = this.dbType === 'postgresql' ? 
+      'UPDATE streamer_configs SET tts_settings = $1 WHERE streamer_id = $2' : 
+      'UPDATE streamer_configs SET tts_settings = ? WHERE streamer_id = ?';
+    await this.query(query, [settingsJson, streamerId]);
   }
 
   async getPollSettings(streamerId) {
-    // Placeholder - return default settings for now
-    return {
-      enabled: false,
-      duration: 30000,
-      allowMultiple: false
-    };
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT poll_settings FROM streamer_configs WHERE streamer_id = $1' : 
+      'SELECT poll_settings FROM streamer_configs WHERE streamer_id = ?';
+    const result = await this.query(query, [streamerId]);
+    if (result.rows[0] && result.rows[0].poll_settings) {
+      return typeof result.rows[0].poll_settings === 'string' ? 
+        JSON.parse(result.rows[0].poll_settings) : 
+        result.rows[0].poll_settings;
+    }
+    return null;
+  }
+
+  async updatePollSettings(streamerId, settings) {
+    const settingsJson = JSON.stringify(settings);
+    const query = this.dbType === 'postgresql' ? 
+      'UPDATE streamer_configs SET poll_settings = $1 WHERE streamer_id = $2' : 
+      'UPDATE streamer_configs SET poll_settings = ? WHERE streamer_id = ?';
+    await this.query(query, [settingsJson, streamerId]);
+  }
+
+  async getTTSMessages(streamerId, limit = 50) {
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT * FROM tts_messages WHERE streamer_id = $1 ORDER BY created_at DESC LIMIT $2' : 
+      'SELECT * FROM tts_messages WHERE streamer_id = ? ORDER BY created_at DESC LIMIT ?';
+    const result = await this.query(query, [streamerId, limit]);
+    return result.rows;
   }
 
   async getAutomodSettings(streamerId) {
-    // Placeholder - return default settings for now
-    return {
-      enabled: false,
-      sensitivity: 0.7,
-      bannedWords: [],
-      maxLength: 500
-    };
+    const query = this.dbType === 'postgresql' ? 
+      'SELECT automod_settings FROM streamer_configs WHERE streamer_id = $1' : 
+      'SELECT automod_settings FROM streamer_configs WHERE streamer_id = ?';
+    const result = await this.query(query, [streamerId]);
+    if (result.rows[0] && result.rows[0].automod_settings) {
+      return typeof result.rows[0].automod_settings === 'string' ? 
+        JSON.parse(result.rows[0].automod_settings) : 
+        result.rows[0].automod_settings;
+    }
+    return null;
+  }
+
+  async updateAutomodSettings(streamerId, settings) {
+    const settingsJson = JSON.stringify(settings);
+    const query = this.dbType === 'postgresql' ? 
+      'UPDATE streamer_configs SET automod_settings = $1 WHERE streamer_id = $2' : 
+      'UPDATE streamer_configs SET automod_settings = ? WHERE streamer_id = ?';
+    await this.query(query, [settingsJson, streamerId]);
   }
 
   async createStreamerConfig(configData) {
@@ -295,99 +370,36 @@ class DatabaseService {
     } else if (this.dbType === 'sqlite') {
       const query = `INSERT INTO streamer_configs (user_id, streamer_id, username, wallet_address, token_address) VALUES (?, ?, ?, ?, ?)`;
       await this.query(query, [user_id, streamer_id, username, wallet_address, token_address]);
-      
-      // Get the inserted config
-      const selectQuery = `SELECT * FROM streamer_configs WHERE streamer_id = ?`;
-      const result = await this.query(selectQuery, [streamer_id]);
+      // Get the last inserted row
+      const result = await this.query('SELECT * FROM streamer_configs WHERE id = last_insert_rowid()');
       return result.rows[0];
     }
   }
 
-  async getStreamerConfig(streamerId) {
-    if (this.dbType === 'postgresql') {
-      const query = 'SELECT * FROM streamer_configs WHERE streamer_id = $1';
-      const result = await this.query(query, [streamerId]);
-      return result.rows[0];
-    } else if (this.dbType === 'sqlite') {
-      const query = 'SELECT * FROM streamer_configs WHERE streamer_id = ?';
-      const result = await this.query(query, [streamerId]);
-      return result.rows[0];
+  async deleteStreamer(streamerId) {
+    try {
+      if (this.dbType === 'postgresql') {
+        const query = `DELETE FROM streamer_configs WHERE streamer_id = $1`;
+        await this.query(query, [streamerId]);
+      } else if (this.dbType === 'sqlite') {
+        const query = `DELETE FROM streamer_configs WHERE streamer_id = ?`;
+        await this.query(query, [streamerId]);
+      }
+      console.log(`🗑️ Deleted streamer ${streamerId} from database`);
+      return { success: true, message: 'Streamer deleted successfully' };
+    } catch (error) {
+      console.error('Error deleting streamer:', error);
+      throw error;
     }
-  }
-
-  async updateTTSSettings(streamerId, settings) {
-    // Placeholder - in a real implementation, you'd store these in a tts_settings table
-    console.log(`TTS settings updated for ${streamerId}:`, settings);
-    return true;
-  }
-
-  async updatePollSettings(streamerId, settings) {
-    // Placeholder - in a real implementation, you'd store these in a poll_settings table
-    console.log(`Poll settings updated for ${streamerId}:`, settings);
-    return true;
-  }
-
-  async updateAutomodSettings(streamerId, settings) {
-    // Placeholder - in a real implementation, you'd store these in an automod_settings table
-    console.log(`Automod settings updated for ${streamerId}:`, settings);
-    return true;
-  }
-
-  async getTTSMessages(streamerId, limit = 50) {
-    console.log(`Getting TTS messages for ${streamerId}, limit: ${limit}`);
-    
-    if (this.dbType === 'postgresql') {
-      const query = `SELECT * FROM tts_messages WHERE streamer_id = $1 ORDER BY timestamp DESC LIMIT $2`;
-      const result = await this.query(query, [streamerId, limit]);
-      return result.rows;
-    } else if (this.dbType === 'sqlite') {
-      const query = `SELECT * FROM tts_messages WHERE streamer_id = ? ORDER BY timestamp DESC LIMIT ?`;
-      const result = await this.query(query, [streamerId, limit]);
-      return result.rows;
-    }
-    return [];
-  }
-
-  async saveTTSMessage(streamerId, messageData) {
-    console.log(`Saving TTS message for ${streamerId}:`, messageData);
-    
-    if (this.dbType === 'postgresql') {
-      const query = `INSERT INTO tts_messages (streamer_id, message_text, sender, timestamp, message_type, amount) VALUES ($1, $2, $3, $4, $5, $6)`;
-      await this.query(query, [streamerId, messageData.text, messageData.sender, messageData.timestamp, messageData.type, messageData.amount]);
-    } else if (this.dbType === 'sqlite') {
-      const query = `INSERT INTO tts_messages (streamer_id, message_text, sender, timestamp, message_type, amount) VALUES (?, ?, ?, ?, ?, ?)`;
-      await this.query(query, [streamerId, messageData.text, messageData.sender, messageData.timestamp, messageData.type, messageData.amount]);
-    }
-    return true;
-  }
-
-  async cleanupOldTTSMessages(streamerId, keepCount = 50) {
-    console.log(`Cleaning up old TTS messages for ${streamerId}, keeping ${keepCount} most recent`);
-    
-    if (this.dbType === 'postgresql') {
-      const query = `DELETE FROM tts_messages WHERE streamer_id = $1 AND id NOT IN (SELECT id FROM tts_messages WHERE streamer_id = $1 ORDER BY timestamp DESC LIMIT $2)`;
-      await this.query(query, [streamerId, keepCount]);
-    } else if (this.dbType === 'sqlite') {
-      const query = `DELETE FROM tts_messages WHERE streamer_id = ? AND id NOT IN (SELECT id FROM tts_messages WHERE streamer_id = ? ORDER BY timestamp DESC LIMIT ?)`;
-      await this.query(query, [streamerId, streamerId, keepCount]);
-    }
-    return true;
-  }
-
-  async getPollMessages(streamerId, limit = 50) {
-    // Placeholder - in a real implementation, you'd have a poll_messages table
-    console.log(`Getting poll messages for ${streamerId}, limit: ${limit}`);
-    return [];
-  }
-
-  async savePollMessage(streamerId, messageData) {
-    // Placeholder - in a real implementation, you'd save to a poll_messages table
-    console.log(`Saving poll message for ${streamerId}:`, messageData);
-    return true;
   }
 
   isConnected() {
-    return this.dbType === 'postgresql' ? this.pool !== null : this.db !== null;
+    if (this.dbType === 'postgresql') {
+      return this.pool !== null;
+    } else if (this.dbType === 'sqlite') {
+      return this.db !== null;
+    }
+    return false;
   }
 
   async close() {

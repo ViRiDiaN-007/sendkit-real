@@ -1,0 +1,23 @@
+# Slur words list for automod
+# One word per line, case insensitive matching
+# Lines starting with # are comments and will be ignored
+
+# Racial slurs
+nigger
+spic
+chink
+kike
+wetback
+towelhead
+sandnigger
+coon
+jigaboo
+negro
+gook
+
+# Homophobic slurs
+faggot
+fag
+
+# Religious slurs
+kike
